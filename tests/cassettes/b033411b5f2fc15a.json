@@ -1,0 +1,48 @@
+{
+  "request": {
+    "json_schema": {
+      "additionalProperties": false,
+      "description": "What the classifier must return for every email.",
+      "properties": {
+        "category": {
+          "enum": [
+            "billing",
+            "technical",
+            "account",
+            "general"
+          ],
+          "title": "Category",
+          "type": "string"
+        },
+        "summary": {
+          "maxLength": 400,
+          "minLength": 1,
+          "title": "Summary",
+          "type": "string"
+        }
+      },
+      "required": [
+        "category",
+        "summary"
+      ],
+      "type": "object"
+    },
+    "max_tokens": 512,
+    "model": "gpt-4o-mini",
+    "system": "You triage inbound customer support email for a SaaS product.\n\nFor each email, return exactly two things:\n  - category: one of billing, technical, account, general\n  - summary: one sentence, under 25 words, stating the customer's request\n\nCategory definitions:\n  billing   - invoices, charges, refunds, payment methods, pricing, plan cost\n  technical - errors, bugs, outages, integrations, performance, data problems\n  account   - login, password, MFA, permissions, seats, profile, cancellation\n  general   - anything else: sales questions, feedback, partnerships, thanks\n\nTie-break rules, applied in order:\n  1. If the email asks for money back, it is billing, even if a bug caused it.\n  2. If the customer cannot sign in, it is account, even if they call it a bug.\n  3. If two categories still apply, choose the one the customer asks you to act on.\n  4. If the email is empty, unintelligible, or has no request, choose general.\n\nWrite the summary from the customer's point of view. Do not invent details that\nare not in the email. Do not include the category name in the summary.\n\nExamples:\n\nEmail:\nHi - we were charged twice for the September invoice (INV-4471 and INV-4472,\nboth $240). Can you refund the duplicate?\n\nExpected output:\n{\"category\": \"billing\", \"summary\": \"Customer was charged twice for September and wants the duplicate invoice refunded.\"}\n\n---\n\nEmail:\nSince yesterday the webhook endpoint returns 502 about half the time. Nothing\nchanged on our side. Our sync is falling behind.\n\nExpected output:\n{\"category\": \"technical\", \"summary\": \"Customer reports intermittent 502 errors from the webhook endpoint causing sync delays.\"}\n\n---\n\nEmail:\nI lost my phone and my authenticator app with it, so I can't get past the\n2FA prompt. Please help me back in.\n\nExpected output:\n{\"category\": \"account\", \"summary\": \"Customer lost their authenticator device and needs help regaining access past 2FA.\"}",
+    "temperature": 0.0,
+    "user": "I've been locked out after too many password attempts. Can you reset it?"
+  },
+  "response": {
+    "cost_usd": null,
+    "fingerprint": "b033411b5f2fc15a",
+    "latency_ms": 0,
+    "model": "gpt-4o-mini",
+    "provider": "stub",
+    "text": "{\"category\": \"account\", \"summary\": \"Customer is locked out after failed password attempts and requests a reset.\"}",
+    "usage": {
+      "input_tokens": 476,
+      "output_tokens": 28
+    }
+  }
+}

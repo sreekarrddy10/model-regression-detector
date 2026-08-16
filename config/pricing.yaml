@@ -1,0 +1,23 @@
+# Token pricing, USD per 1,000,000 tokens.
+#
+# VERIFY THESE against the provider pricing pages before trusting any cost number
+# in a report. They are seeded, not authoritative, and they change without notice:
+#   https://openai.com/api/pricing/
+#   https://www.anthropic.com/pricing
+#
+# A model absent from this file is not an error - its cost is recorded as
+# unavailable and the cost dimension of the gate is skipped for that run.
+
+models:
+  gpt-4o:
+    input_per_mtok: 2.50
+    output_per_mtok: 10.00
+  gpt-4o-mini:
+    input_per_mtok: 0.15
+    output_per_mtok: 0.60
+  claude-sonnet-5:
+    input_per_mtok: 3.00
+    output_per_mtok: 15.00
+  claude-haiku-4-5-20251001:
+    input_per_mtok: 1.00
+    output_per_mtok: 5.00
