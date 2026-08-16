@@ -3,16 +3,17 @@
 CI/CD for model behavior. Every prompt change is evaluated against a human-labeled golden dataset;
 statistically significant quality regressions block the merge before bad outputs reach users.
 
-**Status: Phase 3 of 6** — feature, providers, dataset tooling and the evaluation engine are built.
-Golden cases are being authored by hand. See [tasks/todo.md](tasks/todo.md) and [docs/SPEC.md](docs/SPEC.md).
+**Status: Phase 4 of 6** — feature, providers, dataset tooling, evaluation engine and reporting
+are built. Golden cases are being authored by hand. See [tasks/todo.md](tasks/todo.md) and [docs/SPEC.md](docs/SPEC.md).
 
 ## Quick start
 
 ```bash
 make install          # uv venv @ 3.11 + dev tooling
-make test             # offline tier: 175 tests, no network, no API keys
+make test             # offline tier: 216 tests, no network, no API keys
 make lint             # ruff + black + isort + mypy --strict + bandit
 make dataset-report   # golden dataset coverage and remaining gaps
+make demo-report      # regenerate docs/sample-report.html from a scripted regression
 ```
 
 No API key is needed to run the test suite. That is deliberate — see *Cassettes* below.
@@ -30,6 +31,8 @@ No API key is needed to run the test suite. That is deliberate — see *Cassette
 | [src/mrd/stats.py](src/mrd/stats.py) | McNemar exact, weighted κ, Spearman, EWMA |
 | [src/mrd/compare.py](src/mrd/compare.py) | Run diffing and the merge gate |
 | [src/mrd/store/](src/mrd/store/) | SQLite run history and baseline selection |
+| [src/mrd/report/](src/mrd/report/) | Single-file HTML diff report |
+| [src/mrd/alerts/](src/mrd/alerts/) | Slack Block Kit alerting |
 | [config/pricing.yaml](config/pricing.yaml) | Token prices as reviewable config, not hardcoded constants |
 
 ## Golden dataset
@@ -143,7 +146,23 @@ hundred blocks on significance even though the headline drop is only 6%.
 mode, so both are measured and reported — but neither can block, because neither is a correctness
 signal.
 
+## The report
+
+[docs/sample-report.html](docs/sample-report.html) is a real one, generated offline by
+`make demo-report` from a scripted regression. It is a single file: inline CSS, a hand-generated SVG
+trend line, no JavaScript, no external references at all — it is opened from a CI artifact on a
+laptop with no network, so one CDN link would break it exactly when someone needs to read it.
+
+It leads with the verdict and every rule that fired, then shows each regressed case with both runs'
+attempts side by side, the expected answer, and the `notes` line explaining why that case exists.
+The McNemar p-value and discordant-pair count are printed in full, because a reader should be able
+to audit the gate rather than just obey it.
+
+The Slack alert is built from the same `ReportData` structure, so the two views cannot disagree
+about what happened. It never truncates silently — a reader who cannot tell 5 regressions from 40
+will under-react to the larger failure.
+
 ## Next
 
-Phase 4 builds the HTML diff report and Slack alerting on top of these gate reports. The `make eval`
-entry point lands with it — the engine needs a locked dataset to run against.
+Phase 5 wires the tiered GitHub Actions workflow and the `make eval` entry point, which needs a
+locked golden dataset to run against.

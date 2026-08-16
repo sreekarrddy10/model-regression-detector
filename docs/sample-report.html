@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Eval run-042 — BLOCK</title>
+<style>
+  :root {
+    --bg: #ffffff; --fg: #1d2939; --muted: #667085; --line: #eaecf0; --panel: #f9fafb;
+    --pass: #067647; --pass-bg: #ecfdf3; --warn: #b54708; --warn-bg: #fffaeb;
+    --block: #b42318; --block-bg: #fef3f2; --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12161c; --fg: #e4e7ec; --muted: #98a2b3; --line: #2a313b; --panel: #1a1f27;
+      --pass: #75e0a7; --pass-bg: #05301f; --warn: #fdb022; --warn-bg: #3a2a06;
+      --block: #fda29b; --block-bg: #3d1512;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 32px 20px 64px; background: var(--bg); color: var(--fg);
+         font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+  .wrap { max-width: 940px; margin: 0 auto; }
+  h1 { font-size: 20px; margin: 0 0 4px; letter-spacing: -0.01em; }
+  h2 { font-size: 15px; margin: 36px 0 12px; text-transform: uppercase;
+       letter-spacing: 0.06em; color: var(--muted); }
+  .sub { color: var(--muted); font-size: 13px; margin: 0 0 24px; }
+  .verdict { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+             border: 1px solid; border-radius: 10px; padding: 16px 18px; margin-bottom: 8px; }
+  .verdict .tag { font-weight: 700; letter-spacing: 0.08em; font-size: 13px; }
+  .verdict .headline { font-size: 15px; }
+  .PASS  { border-color: var(--pass);  background: var(--pass-bg); }
+  .PASS .tag  { color: var(--pass); }
+  .WARN  { border-color: var(--warn);  background: var(--warn-bg); }
+  .WARN .tag  { color: var(--warn); }
+  .BLOCK { border-color: var(--block); background: var(--block-bg); }
+  .BLOCK .tag { color: var(--block); }
+  ul.reasons { margin: 10px 0 0; padding-left: 20px; }
+  ul.reasons li { margin: 4px 0; }
+  li.block { color: var(--block); }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase;
+       letter-spacing: 0.05em; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; font-family: var(--mono); }
+  .scroll { overflow-x: auto; }
+  .case { border: 1px solid var(--line); border-radius: 10px; margin-bottom: 14px;
+          overflow: hidden; background: var(--panel); }
+  .case > header { display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+                   padding: 10px 14px; border-bottom: 1px solid var(--line); }
+  .case h3 { margin: 0; font-size: 14px; font-family: var(--mono); }
+  .pill { font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line);
+          color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  .pill.critical { color: var(--block); border-color: var(--block); font-weight: 700; }
+  .pill.regressed { color: var(--block); border-color: var(--block); }
+  .pill.improved { color: var(--pass); border-color: var(--pass); }
+  .pill.flaky { color: var(--warn); border-color: var(--warn); }
+  .body { padding: 12px 14px; }
+  .email { font-family: var(--mono); font-size: 12.5px; white-space: pre-wrap; background: var(--bg);
+           border: 1px solid var(--line); border-radius: 6px; padding: 10px; margin: 0 0 12px; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 720px) { .cols { grid-template-columns: 1fr; } }
+  .col h4 { margin: 0 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em;
+            color: var(--muted); }
+  .attempt { font-family: var(--mono); font-size: 12.5px; padding: 6px 8px; border-radius: 6px;
+             border: 1px solid var(--line); background: var(--bg); margin-bottom: 6px; }
+  .attempt.fail { border-color: var(--block); }
+  .attempt.ok { border-color: var(--pass); }
+  .attempt .summary { color: var(--muted); display: block; margin-top: 3px;
+                      font-family: inherit; white-space: pre-wrap; }
+  .note { color: var(--muted); font-size: 13px; margin: 10px 0 0; }
+  .stats { display: flex; gap: 28px; flex-wrap: wrap; align-items: flex-end; }
+  footer { margin-top: 48px; color: var(--muted); font-size: 12px;
+           border-top: 1px solid var(--line); padding-top: 14px; }
+  code { font-family: var(--mono); font-size: 0.92em; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Eval run <code>run-042</code></h1>
+  <p class="sub">
+    prompt <code>v001</code> ·
+    model <code>gpt-4o-mini</code> ·
+    dataset <code>v1</code> (<code>9f2c4a17d3e8</code>) ·
+    3× repeats · full tier ·
+    commit <code>f6e5d4c3b2a1</code>
+  </p>
+
+  <div class="verdict BLOCK">
+    <span class="tag">BLOCK</span>
+    <span class="headline">2 regressions: accuracy 100.0% → 66.7%.</span>
+  </div>
+
+  <ul class="reasons">
+    <li class="block"><strong>Blocking.</strong> 2 critical case(s) regressed: tc_0002, tc_0006</li>
+    <li class="block"><strong>Blocking.</strong> 3 attempt(s) produced output that does not match the response schema</li>
+    <li class="block"><strong>Blocking.</strong> accuracy fell 33.3% (100.0% -> 66.7%), past the 8% block threshold</li>
+    <li>p95 latency rose 45% (100ms -> 145ms)</li>
+    <li>cost per case rose 60%</li>
+    <li>1 case(s) became non-deterministic across repeats: tc_0004</li>
+    <li>7-run trend accuracy is 85.4%, below the 90% floor; gradual drift that no single run triggered</li>
+  </ul>
+
+  <h2>Scorecard</h2>
+  <div class="scroll">
+  <table>
+    <thead>
+      <tr><th>Metric</th><th class="num">Baseline</th><th class="num">This run</th><th class="num">Δ</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Accuracy (majority of 3)</td>
+        <td class="num">100.0%</td>
+        <td class="num">66.7%</td>
+        <td class="num">-33.3%</td>
+      </tr>
+      <tr>
+        <td>pass@1</td>
+        <td class="num">100.0%</td>
+        <td class="num">66.7%</td>
+        <td class="num">—</td>
+      </tr>
+      <tr>
+        <td>pass@3</td>
+        <td class="num">100.0%</td>
+        <td class="num">66.7%</td>
+        <td class="num">—</td>
+      </tr>
+      <tr>
+        <td>pass^3 (all repeats)</td>
+        <td class="num">100.0%</td>
+        <td class="num">50.0%</td>
+        <td class="num">—</td>
+      </tr>
+      <tr>
+        <td>Summary quality (judge, 1–5)</td>
+        <td class="num">—</td>
+        <td class="num">—</td>
+        <td class="num">—</td>
+      </tr>
+      <tr>
+        <td>p95 latency</td>
+        <td class="num">100 ms</td>
+        <td class="num">145 ms</td>
+        <td class="num">+45.0%</td>
+      </tr>
+      <tr>
+        <td>Cost per case</td>
+        <td class="num">$0.0030</td>
+        <td class="num">$0.0048</td>
+        <td class="num">+60.0%</td>
+      </tr>
+      <tr>
+        <td>Schema failures / provider errors</td>
+        <td class="num">0 / 0</td>
+        <td class="num">3 / 0</td>
+        <td class="num">—</td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+
+  <p class="note">
+    2 regressed, 0 improved across
+    6 cases. McNemar exact <code>p = 0.5000</code>
+    on the 2 discordant pair(s) —
+not significant at α = 0.05.    A case counts as regressed only when it fails in a majority of its 3 repeats.
+  </p>
+
+  <h2>Judge calibration</h2>
+  <div class="stats">
+    <div>
+      <div class="sub" style="margin:0">Cohen's κ (quadratic)</div>
+      <strong style="font-size:22px;font-family:var(--mono)">0.78</strong>
+    </div>
+    <div>
+      <div class="sub" style="margin:0">Spearman ρ</div>
+      <strong style="font-size:22px;font-family:var(--mono)">0.81</strong>
+    </div>
+    <div>
+      <div class="sub" style="margin:0">Human-scored summaries</div>
+      <strong style="font-size:22px;font-family:var(--mono)">20</strong>
+    </div>
+  </div>
+  <p class="note">judge agrees with human scores (kappa=0.78 >= 0.60, rho=0.81, n=20)</p>
+
+  <h2>Accuracy trend</h2>
+  <svg viewBox="0 0 320 60" width="320" height="60" role="img" aria-label="accuracy trend over recent runs"><line x1="6" y1="46.0" x2="314" y2="46.0" stroke="#d0d5dd" stroke-dasharray="4 3" stroke-width="1"/><polyline points="6.0,14.0 67.6,18.0 129.2,26.0 190.8,30.0 252.4,38.0 314.0,46.0" fill="none" stroke="#067647" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/><circle cx="314.0" cy="46.0" r="3.5" fill="#067647"/></svg>
+  <p class="note">
+    Last 6 comparable runs, oldest first. The dashed line is the 90% drift
+    floor: gradual degradation shows up here even when no single run-to-run diff fires.
+  </p>
+
+  <h2>Cases needing attention (3)</h2>
+  <article class="case">
+    <header>
+      <h3>tc_0002</h3>
+      <span class="pill regressed">regressed</span>
+<span class="pill critical">critical</span>      <span class="pill">ambiguous</span>
+      <span class="pill">expected: billing</span>
+    </header>
+    <div class="body">
+      <pre class="email">The sync broke after your last release and it double-billed our customers. We want the overcharge back today.</pre>
+      <div class="cols">
+        <div class="col">
+          <h4>Baseline — pass</h4>
+          <div class="attempt ok">
+            r0: billing
+<span class="summary">Produced summary for tc_0002.</span>          </div>
+          <div class="attempt ok">
+            r1: billing
+<span class="summary">Produced summary for tc_0002.</span>          </div>
+          <div class="attempt ok">
+            r2: billing
+<span class="summary">Produced summary for tc_0002.</span>          </div>
+        </div>
+        <div class="col">
+          <h4>This run — fail</h4>
+          <div class="attempt fail">
+            r0: technical
+<span class="summary">Produced summary for tc_0002.</span>          </div>
+          <div class="attempt fail">
+            r1: technical
+<span class="summary">Produced summary for tc_0002.</span>          </div>
+          <div class="attempt fail">
+            r2: technical
+<span class="summary">Produced summary for tc_0002.</span>          </div>
+        </div>
+      </div>
+      <p class="note"><strong>Expected summary.</strong> Customer wants a refund for overcharges caused by a sync bug.</p>
+      <p class="note"><strong>Why this case exists.</strong> Tie-break rule 1: asks for money back, so billing even though a bug caused it.</p>
+    </div>
+  </article>
+  <article class="case">
+    <header>
+      <h3>tc_0006</h3>
+      <span class="pill regressed">regressed</span>
+<span class="pill critical">critical</span>      <span class="pill">adversarial</span>
+      <span class="pill">expected: general</span>
+    </header>
+    <div class="body">
+      <pre class="email">?</pre>
+      <div class="cols">
+        <div class="col">
+          <h4>Baseline — pass</h4>
+          <div class="attempt ok">
+            r0: general
+<span class="summary">Produced summary for tc_0006.</span>          </div>
+          <div class="attempt ok">
+            r1: general
+<span class="summary">Produced summary for tc_0006.</span>          </div>
+          <div class="attempt ok">
+            r2: general
+<span class="summary">Produced summary for tc_0006.</span>          </div>
+        </div>
+        <div class="col">
+          <h4>This run — fail</h4>
+          <div class="attempt fail">
+            r0: unparseable
+<span class="summary">invalid JSON: Expecting value: line 1 column 1 (char 0)</span>          </div>
+          <div class="attempt fail">
+            r1: unparseable
+<span class="summary">invalid JSON: Expecting value: line 1 column 1 (char 0)</span>          </div>
+          <div class="attempt fail">
+            r2: unparseable
+<span class="summary">invalid JSON: Expecting value: line 1 column 1 (char 0)</span>          </div>
+        </div>
+      </div>
+      <p class="note"><strong>Expected summary.</strong> Customer sent an empty message with no discernible request.</p>
+      <p class="note"><strong>Why this case exists.</strong> Tie-break rule 4. Degenerate input must not crash or hallucinate a category.</p>
+    </div>
+  </article>
+  <article class="case">
+    <header>
+      <h3>tc_0004</h3>
+      <span class="pill flaky">flaky</span>
+      <span class="pill">adversarial</span>
+      <span class="pill">expected: account</span>
+    </header>
+    <div class="body">
+      <pre class="email">Great, another 'improvement' that logs me out every twenty minutes. Love it.</pre>
+      <div class="cols">
+        <div class="col">
+          <h4>Baseline — pass</h4>
+          <div class="attempt ok">
+            r0: account
+<span class="summary">Produced summary for tc_0004.</span>          </div>
+          <div class="attempt ok">
+            r1: account
+<span class="summary">Produced summary for tc_0004.</span>          </div>
+          <div class="attempt ok">
+            r2: account
+<span class="summary">Produced summary for tc_0004.</span>          </div>
+        </div>
+        <div class="col">
+          <h4>This run — pass</h4>
+          <div class="attempt ok">
+            r0: account
+<span class="summary">Produced summary for tc_0004.</span>          </div>
+          <div class="attempt fail">
+            r1: billing
+<span class="summary">Produced summary for tc_0004.</span>          </div>
+          <div class="attempt ok">
+            r2: account
+<span class="summary">Produced summary for tc_0004.</span>          </div>
+        </div>
+      </div>
+      <p class="note"><strong>Expected summary.</strong> Customer is being logged out every twenty minutes and wants it fixed.</p>
+      <p class="note"><strong>Why this case exists.</strong> Sarcasm: literal reading suggests praise. Tie-break rule 2 puts sign-in under account.</p>
+    </div>
+  </article>
+
+  <footer>
+    Generated 2026-08-16T12:30:00+00:00 ·
+    Model Regression Detection System ·
+    deterministic graders gate, model graders advise
+  </footer>
+
+</div>
+</body>
+</html>

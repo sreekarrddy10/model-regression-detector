@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Eval {{ d.run.run_id }} — {{ d.gate.verdict }}</title>
+<style>
+  :root {
+    --bg: #ffffff; --fg: #1d2939; --muted: #667085; --line: #eaecf0; --panel: #f9fafb;
+    --pass: #067647; --pass-bg: #ecfdf3; --warn: #b54708; --warn-bg: #fffaeb;
+    --block: #b42318; --block-bg: #fef3f2; --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12161c; --fg: #e4e7ec; --muted: #98a2b3; --line: #2a313b; --panel: #1a1f27;
+      --pass: #75e0a7; --pass-bg: #05301f; --warn: #fdb022; --warn-bg: #3a2a06;
+      --block: #fda29b; --block-bg: #3d1512;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 32px 20px 64px; background: var(--bg); color: var(--fg);
+         font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+  .wrap { max-width: 940px; margin: 0 auto; }
+  h1 { font-size: 20px; margin: 0 0 4px; letter-spacing: -0.01em; }
+  h2 { font-size: 15px; margin: 36px 0 12px; text-transform: uppercase;
+       letter-spacing: 0.06em; color: var(--muted); }
+  .sub { color: var(--muted); font-size: 13px; margin: 0 0 24px; }
+  .verdict { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+             border: 1px solid; border-radius: 10px; padding: 16px 18px; margin-bottom: 8px; }
+  .verdict .tag { font-weight: 700; letter-spacing: 0.08em; font-size: 13px; }
+  .verdict .headline { font-size: 15px; }
+  .PASS  { border-color: var(--pass);  background: var(--pass-bg); }
+  .PASS .tag  { color: var(--pass); }
+  .WARN  { border-color: var(--warn);  background: var(--warn-bg); }
+  .WARN .tag  { color: var(--warn); }
+  .BLOCK { border-color: var(--block); background: var(--block-bg); }
+  .BLOCK .tag { color: var(--block); }
+  ul.reasons { margin: 10px 0 0; padding-left: 20px; }
+  ul.reasons li { margin: 4px 0; }
+  li.block { color: var(--block); }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase;
+       letter-spacing: 0.05em; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; font-family: var(--mono); }
+  .scroll { overflow-x: auto; }
+  .case { border: 1px solid var(--line); border-radius: 10px; margin-bottom: 14px;
+          overflow: hidden; background: var(--panel); }
+  .case > header { display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+                   padding: 10px 14px; border-bottom: 1px solid var(--line); }
+  .case h3 { margin: 0; font-size: 14px; font-family: var(--mono); }
+  .pill { font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line);
+          color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  .pill.critical { color: var(--block); border-color: var(--block); font-weight: 700; }
+  .pill.regressed { color: var(--block); border-color: var(--block); }
+  .pill.improved { color: var(--pass); border-color: var(--pass); }
+  .pill.flaky { color: var(--warn); border-color: var(--warn); }
+  .body { padding: 12px 14px; }
+  .email { font-family: var(--mono); font-size: 12.5px; white-space: pre-wrap; background: var(--bg);
+           border: 1px solid var(--line); border-radius: 6px; padding: 10px; margin: 0 0 12px; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 720px) { .cols { grid-template-columns: 1fr; } }
+  .col h4 { margin: 0 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em;
+            color: var(--muted); }
+  .attempt { font-family: var(--mono); font-size: 12.5px; padding: 6px 8px; border-radius: 6px;
+             border: 1px solid var(--line); background: var(--bg); margin-bottom: 6px; }
+  .attempt.fail { border-color: var(--block); }
+  .attempt.ok { border-color: var(--pass); }
+  .attempt .summary { color: var(--muted); display: block; margin-top: 3px;
+                      font-family: inherit; white-space: pre-wrap; }
+  .note { color: var(--muted); font-size: 13px; margin: 10px 0 0; }
+  .stats { display: flex; gap: 28px; flex-wrap: wrap; align-items: flex-end; }
+  footer { margin-top: 48px; color: var(--muted); font-size: 12px;
+           border-top: 1px solid var(--line); padding-top: 14px; }
+  code { font-family: var(--mono); font-size: 0.92em; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Eval run <code>{{ d.run.run_id }}</code></h1>
+  <p class="sub">
+    prompt <code>{{ d.run.prompt_version }}</code> ·
+    model <code>{{ d.run.model }}</code> ·
+    dataset <code>{{ d.run.dataset_version }}</code> (<code>{{ d.run.dataset_hash[:12] }}</code>) ·
+    {{ d.run.repeats }}× repeats · {{ d.run.tier }} tier ·
+    commit <code>{{ d.run.git_sha[:12] }}</code>
+  </p>
+
+  <div class="verdict {{ d.gate.verdict }}">
+    <span class="tag">{{ d.gate.verdict }}</span>
+    <span class="headline">{{ d.headline }}</span>
+  </div>
+
+  {% if d.gate.blocking or d.gate.warnings %}
+  <ul class="reasons">
+    {% for reason in d.gate.blocking %}
+    <li class="block"><strong>Blocking.</strong> {{ reason }}</li>
+    {% endfor %}
+    {% for reason in d.gate.warnings %}
+    <li>{{ reason }}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+  <h2>Scorecard</h2>
+  <div class="scroll">
+  <table>
+    <thead>
+      <tr><th>Metric</th><th class="num">Baseline</th><th class="num">This run</th><th class="num">Δ</th></tr>
+    </thead>
+    <tbody>
+      {% set c = d.comparison %}
+      <tr>
+        <td>Accuracy (majority of {{ d.run.repeats }})</td>
+        <td class="num">{{ (c.baseline.accuracy if c else None) | pct }}</td>
+        <td class="num">{{ d.metrics.accuracy | pct }}</td>
+        <td class="num">{{ (c.accuracy_delta if c else None) | signed_pct }}</td>
+      </tr>
+      <tr>
+        <td>pass@1</td>
+        <td class="num">{{ (c.baseline.pass_at_1 if c else None) | pct }}</td>
+        <td class="num">{{ d.metrics.pass_at_1 | pct }}</td>
+        <td class="num">—</td>
+      </tr>
+      <tr>
+        <td>pass@{{ d.run.repeats }}</td>
+        <td class="num">{{ (c.baseline.pass_at_k_rate if c else None) | pct }}</td>
+        <td class="num">{{ d.metrics.pass_at_k_rate | pct }}</td>
+        <td class="num">—</td>
+      </tr>
+      <tr>
+        <td>pass^{{ d.run.repeats }} (all repeats)</td>
+        <td class="num">{{ (c.baseline.pass_hat_k_rate if c else None) | pct }}</td>
+        <td class="num">{{ d.metrics.pass_hat_k_rate | pct }}</td>
+        <td class="num">—</td>
+      </tr>
+      <tr>
+        <td>Summary quality (judge, 1–5)</td>
+        <td class="num">{{ (c.baseline.judge_mean if c else None) | num }}</td>
+        <td class="num">{{ d.metrics.judge_mean | num }}</td>
+        <td class="num">{{ (c.judge_delta if c else None) | num }}</td>
+      </tr>
+      <tr>
+        <td>p95 latency</td>
+        <td class="num">{{ (c.baseline.p95_latency_ms | round | int ~ ' ms') if c else '—' }}</td>
+        <td class="num">{{ d.metrics.p95_latency_ms | round | int }} ms</td>
+        <td class="num">{{ (c.latency_ratio if c else None) | signed_pct }}</td>
+      </tr>
+      <tr>
+        <td>Cost per case</td>
+        <td class="num">{{ (c.baseline.cost_per_case if c else None) | usd }}</td>
+        <td class="num">{{ d.metrics.cost_per_case | usd }}</td>
+        <td class="num">{{ (c.cost_ratio if c else None) | signed_pct }}</td>
+      </tr>
+      <tr>
+        <td>Schema failures / provider errors</td>
+        <td class="num">{{ (c.baseline.schema_failures ~ ' / ' ~ c.baseline.provider_errors) if c else '—' }}</td>
+        <td class="num">{{ d.metrics.schema_failures }} / {{ d.metrics.provider_errors }}</td>
+        <td class="num">—</td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+
+  {% if c %}
+  <p class="note">
+    {{ c.regressed | length }} regressed, {{ c.improved | length }} improved across
+    {{ d.metrics.case_count }} cases. McNemar exact <code>p = {{ '%.4f' | format(c.mcnemar_p) }}</code>
+    on the {{ (c.regressed | length) + (c.improved | length) }} discordant pair(s) —
+    {% if c.mcnemar_p < 0.05 %}significant at α = 0.05.{% else %}not significant at α = 0.05.{% endif %}
+    A case counts as regressed only when it fails in a majority of its {{ d.run.repeats }} repeats.
+  </p>
+  {% endif %}
+
+  <h2>Judge calibration</h2>
+  {% if d.calibration %}
+  <div class="stats">
+    <div>
+      <div class="sub" style="margin:0">Cohen's κ (quadratic)</div>
+      <strong style="font-size:22px;font-family:var(--mono)">{{ d.calibration.kappa | num }}</strong>
+    </div>
+    <div>
+      <div class="sub" style="margin:0">Spearman ρ</div>
+      <strong style="font-size:22px;font-family:var(--mono)">{{ d.calibration.spearman | num }}</strong>
+    </div>
+    <div>
+      <div class="sub" style="margin:0">Human-scored summaries</div>
+      <strong style="font-size:22px;font-family:var(--mono)">{{ d.calibration.scored_count }}</strong>
+    </div>
+  </div>
+  <p class="note">{{ d.calibration.reason }}</p>
+  {% else %}
+  <p class="note">
+    No judge calibration recorded for this run. Summary-quality numbers above, if any, are
+    uninterpreted — the judge has not been measured against human scores.
+  </p>
+  {% endif %}
+
+  {% if trend_svg %}
+  <h2>Accuracy trend</h2>
+  {{ trend_svg | safe }}
+  <p class="note">
+    Last {{ d.trend | length }} comparable runs, oldest first. The dashed line is the 90% drift
+    floor: gradual degradation shows up here even when no single run-to-run diff fires.
+  </p>
+  {% endif %}
+
+  <h2>Cases needing attention ({{ d.diffs | length }})</h2>
+  {% if not d.diffs %}
+  <p class="note">No regressions, improvements or newly flaky cases.</p>
+  {% endif %}
+  {% for case in d.diffs %}
+  <article class="case">
+    <header>
+      <h3>{{ case.case_id }}</h3>
+      <span class="pill {{ case.kind }}">{{ case.kind }}</span>
+      {% if case.critical %}<span class="pill critical">critical</span>{% endif %}
+      <span class="pill">{{ case.difficulty }}</span>
+      <span class="pill">expected: {{ case.expected_category }}</span>
+    </header>
+    <div class="body">
+      <pre class="email">{{ case.email }}</pre>
+      <div class="cols">
+        <div class="col">
+          <h4>Baseline — {{ case.baseline_verdict }}</h4>
+          {% if not case.baseline %}
+          <div class="attempt">not present in the baseline run</div>
+          {% endif %}
+          {% for a in case.baseline %}
+          <div class="attempt {{ 'ok' if a.passed else 'fail' }}">
+            r{{ a.repeat_idx }}: {{ a.category or (a.error and 'provider error' or 'unparseable') }}
+            {% if a.summary %}<span class="summary">{{ a.summary }}</span>{% endif %}
+            {% if a.parse_error %}<span class="summary">{{ a.parse_error }}</span>{% endif %}
+            {% if a.error %}<span class="summary">{{ a.error }}</span>{% endif %}
+          </div>
+          {% endfor %}
+        </div>
+        <div class="col">
+          <h4>This run — {{ case.candidate_verdict }}</h4>
+          {% for a in case.candidate %}
+          <div class="attempt {{ 'ok' if a.passed else 'fail' }}">
+            r{{ a.repeat_idx }}: {{ a.category or (a.error and 'provider error' or 'unparseable') }}
+            {% if a.summary %}<span class="summary">{{ a.summary }}</span>{% endif %}
+            {% if a.parse_error %}<span class="summary">{{ a.parse_error }}</span>{% endif %}
+            {% if a.error %}<span class="summary">{{ a.error }}</span>{% endif %}
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      <p class="note"><strong>Expected summary.</strong> {{ case.expected_summary }}</p>
+      <p class="note"><strong>Why this case exists.</strong> {{ case.notes }}</p>
+    </div>
+  </article>
+  {% endfor %}
+
+  <footer>
+    Generated {{ d.generated_at.isoformat() }} ·
+    Model Regression Detection System ·
+    deterministic graders gate, model graders advise
+  </footer>
+
+</div>
+</body>
+</html>

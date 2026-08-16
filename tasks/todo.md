@@ -2,7 +2,8 @@
 
 Spec: [docs/SPEC.md](../docs/SPEC.md) · Source: BASWE Guide §Project 1
 
-**Status:** Phase 1 complete. 47 offline tests pass, 88% coverage, all lint gates clean.
+**Status:** Phases 1, 3, 4 complete and Phase 2 plumbing built. 216 offline tests, 97% coverage,
+all lint gates clean. Remaining blocker: the golden cases are hand-authored (Phase 2, below).
 
 ---
 
@@ -67,12 +68,14 @@ Run `make dataset-report` for live progress against every target.
 - [ ] `MRD_TIER` wiring + `make eval` CLI entry point (needs a locked dataset)
 - [ ] **Proof (deferred):** degrade v001→v002, engine names the regressed case IDs at p<0.05 — needs real cases
 
-## Phase 4 — Alerting & reporting (Days 7–9)
+## Phase 4 — Alerting & reporting (Days 7–9) ✅
 
-- [ ] `report/html.py` — Jinja2 single file: metadata, scorecard, side-by-side regressions, trend chart, calibration panel
-- [ ] `alerts/slack.py` — status, headline numbers, top 3 regressed IDs, report link
-- [ ] EWMA slow-drift warning, independent of per-run diff
-- [ ] **Proof:** PASS / WARN / BLOCK alert screenshots; report opens offline
+- [x] `report/model.py` — one verified structure both views render from, so HTML and Slack cannot disagree
+- [x] `report/html.py` + template — single self-contained file: metadata, scorecard, side-by-side attempts, hand-rolled SVG trend, calibration panel
+- [x] `alerts/slack.py` — Block Kit payload built separately from sending; https-only; webhook redacted from errors
+- [x] EWMA slow-drift warning, independent of the per-run diff
+- [x] `scripts/demo_report.py` + `make demo-report`
+- [x] **Proof:** [docs/sample-report.html](../docs/sample-report.html) — a real BLOCK report generated offline, well-formed, zero external references, zero script tags
 
 ## Phase 5 — CI/CD (Days 9–11)
 

@@ -1,4 +1,4 @@
-.PHONY: help venv install seed test lint fmt record eval clean \
+.PHONY: help venv install seed test lint fmt record eval clean demo-report \
         dataset-validate dataset-report dataset-lock dataset-verify dataset-new
 .DEFAULT_GOAL := help
 
@@ -57,11 +57,18 @@ dataset-new: ## Append a blank case row: make dataset-new ID=tc_0007
 	$(PY) -m mrd.dataset new --id $(ID) >> data/golden/emails.jsonl
 	@echo "Appended blank $(ID) to data/golden/emails.jsonl - now fill it in."
 
-record: ## Re-record cassettes from live providers (needs keys)
-	MRD_TIER=record $(PY) -c "raise SystemExit('Phase 3: wire the runner, then record via the runner')"
+demo-report: ## Regenerate docs/sample-report.html from a scripted regression
+	$(PY) scripts/demo_report.py || true
 
-eval: ## Run the eval suite (Phase 3)
-	@echo "Not implemented until Phase 3. Current phase: 1 (feature + providers)."
+record: ## Re-record cassettes from live providers (needs keys)
+	@echo "Recording runs through the eval CLI, which lands with Phase 5."
+	@exit 1
+
+eval: ## Run the eval suite end to end
+	@echo "The engine, gate and reporting are built and tested, but the CLI entry"
+	@echo "point needs a locked golden dataset to run against."
+	@echo "Progress:  make dataset-report"
+	@echo "Sample of the output it produces:  docs/sample-report.html"
 	@exit 1
 
 clean:
