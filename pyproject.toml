@@ -7,6 +7,7 @@ dependencies = [
     "pydantic>=2.5",
     "pyyaml>=6.0",
     "python-dotenv>=1.0",
+    "scipy>=1.11",
 ]
 
 [project.optional-dependencies]
@@ -68,5 +69,5 @@ mypy_path = "src"
 packages = ["mrd"]
 
 [[tool.mypy.overrides]]
-module = ["openai.*", "anthropic.*", "yaml.*", "dotenv.*"]
+module = ["openai.*", "anthropic.*", "yaml.*", "dotenv.*", "scipy.*"]
 ignore_missing_imports = true

@@ -49,10 +49,10 @@ Guide baseline, with three deliberate substitutions (justified in §7).
 |---|---|---|
 | Language | Python 3.11+ | ECC `rules/python/*` applies: PEP 8, type annotations, frozen dataclasses |
 | LLM provider | **Provider-agnostic layer**; OpenAI `gpt-4o` / `gpt-4o-mini` + Anthropic `claude-sonnet-5` | Guide says "easy to swap later" — build the swap on day 1, it costs ~40 LOC |
-| Eval framework | Custom scorers + **DeepEval** (G-Eval) for LLM-as-judge | RAGAS is retrieval-specific and does not fit a classification task |
+| Eval framework | Custom scorers + judge through the provider layer | RAGAS is retrieval-specific; DeepEval was dropped in Phase 3 (see D5) |
 | Structured output | Pydantic v2 + `instructor` | Type-safe parsing; ECC immutability rule |
 | Storage | SQLite (`runs`, `case_results`, `judge_calibration`) + JSONL dataset | Zero infra, git-friendly, queryable |
-| Statistics | `scipy.stats` (McNemar, Wilcoxon) | Replaces flat %-thresholds with a real significance test |
+| Statistics | `scipy.stats` (exact binomial / McNemar, Spearman) | Replaces flat %-thresholds with a real significance test |
 | Reporting | Jinja2 → single-file HTML | No build step, artifact-uploadable from CI |
 | Dashboard | Streamlit (`dashboard/app.py`) | Optional local trend view |
 | Alerting | Slack incoming webhook | What real teams use |
@@ -304,6 +304,14 @@ Category match blocks merge. Summary quality only blocks when the degradation re
 
 **D4 — Dataset hash is part of the comparison key.**
 A run against a mutated golden set is marked incomparable instead of silently diffed. Rejected alternative: compare by timestamp — which lets a quiet ground-truth edit masquerade as a model improvement.
+
+**D5 - The judge runs through the provider layer, not a framework.**
+DeepEval brings its own client stack and would bypass the normalized `Response`,
+dropping the token, latency and cost accounting the gate depends on - the same
+objection that removed `instructor` in Phase 1. The judge is a prompt plus a
+structured-output schema, which keeps it cassette-replayable offline and keeps
+its spend on the same ledger as everything else. Rejected alternative: adopt the
+framework and reconcile two accounting paths.
 
 **Headline for the portfolio:** *"CI/CD for model behavior — a merge gate that blocks prompt changes on statistically significant quality regressions, with a calibrated judge and slow-drift detection, for under $0.05 per pull request."*
 

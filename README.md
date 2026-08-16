@@ -3,14 +3,14 @@
 CI/CD for model behavior. Every prompt change is evaluated against a human-labeled golden dataset;
 statistically significant quality regressions block the merge before bad outputs reach users.
 
-**Status: Phase 2 of 6** — feature, providers and offline tier done; golden-dataset tooling done,
-cases being authored by hand. See [tasks/todo.md](tasks/todo.md) and [docs/SPEC.md](docs/SPEC.md).
+**Status: Phase 3 of 6** — feature, providers, dataset tooling and the evaluation engine are built.
+Golden cases are being authored by hand. See [tasks/todo.md](tasks/todo.md) and [docs/SPEC.md](docs/SPEC.md).
 
 ## Quick start
 
 ```bash
 make install          # uv venv @ 3.11 + dev tooling
-make test             # offline tier: 94 tests, no network, no API keys
+make test             # offline tier: 175 tests, no network, no API keys
 make lint             # ruff + black + isort + mypy --strict + bandit
 make dataset-report   # golden dataset coverage and remaining gaps
 ```
@@ -25,6 +25,11 @@ No API key is needed to run the test suite. That is deliberate — see *Cassette
 | [src/mrd/feature/](src/mrd/feature/) | The system under test: support email → `{category, summary}` |
 | [src/mrd/providers/](src/mrd/providers/) | One normalized contract over OpenAI and Anthropic |
 | [src/mrd/dataset/](src/mrd/dataset/) | Golden dataset validation, content hashing, coverage reporting |
+| [src/mrd/runner.py](src/mrd/runner.py) | Async runner: N repeats at temperature 0, bounded concurrency, retry |
+| [src/mrd/graders/](src/mrd/graders/) | Deterministic graders, LLM-as-judge, judge calibration |
+| [src/mrd/stats.py](src/mrd/stats.py) | McNemar exact, weighted κ, Spearman, EWMA |
+| [src/mrd/compare.py](src/mrd/compare.py) | Run diffing and the merge gate |
+| [src/mrd/store/](src/mrd/store/) | SQLite run history and baseline selection |
 | [config/pricing.yaml](config/pricing.yaml) | Token prices as reviewable config, not hardcoded constants |
 
 ## Golden dataset
@@ -60,7 +65,7 @@ the spread is too narrow.
 
 **The prompt is data, not code.** It lives in `prompts/classifier/v001.yaml` with a `version_id` and
 a `commit_message`. `temperature` is validated to be exactly `0.0` at load time — sampling would make
-the flip detection in Phase 3 meaningless, so non-zero is refused rather than warned about.
+flip detection meaningless, so non-zero is refused rather than warned about.
 
 **A bad model output is data, not an exception.** `classify()` never raises on malformed output; it
 returns `parse_error` alongside the raw response. Schema validity is a blocking gate signal, so a
@@ -101,10 +106,44 @@ make seed    # regenerate offline cassettes from deterministic stubs
 
 The committed cassettes are stub responses — plumbing fixtures that let a fresh clone run green.
 They are not model behavior and are never used to measure quality. Real recorded responses arrive
-in Phase 3 alongside the runner.
+with the first live run against a locked dataset.
+
+## The gate
+
+A merge is blocked only by signals that are reproducible and explainable.
+
+| Signal | Action |
+|---|---|
+| A `critical` case loses `pass^3` | **BLOCK** |
+| Output stops matching the response schema | **BLOCK** |
+| Accuracy falls ≥ 8% | **BLOCK** |
+| Regressions significantly outnumber improvements (McNemar exact, p < 0.05) | **BLOCK** |
+| Judge fails calibration against human scores | **BLOCK** |
+| Summary quality falls ≥ 0.5, confirmed across 3 seeds | **BLOCK** |
+| Accuracy falls 3–8% | WARN |
+| Summary quality falls 0.3–0.5, or unconfirmed | WARN |
+| p95 latency +25%, or cost per case +30% | WARN |
+| Cases became non-deterministic across repeats | WARN |
+| 7-run EWMA accuracy below 90% | WARN |
+| Baseline scored against different ground truth | refuses to diff |
+
+Three properties are worth calling out.
+
+**A flip is not a regression.** Every case runs three times at temperature 0. A case that fails once
+of three is recorded as *flaky* and warns; it must fail at least twice to count as regressed. This is
+what stops sampling noise from blocking merges.
+
+**Significance and effect size both have to trip.** The guide this project follows proposes flat 3%
+and 8% thresholds, which cannot distinguish 2-of-80 from noise at all — and a p-value alone would
+block on trivia once the dataset is large. The gate keeps the percentage as an effect-size floor and
+adds McNemar's exact test on the discordant pairs. Six regressions and zero improvements out of a
+hundred blocks on significance even though the headline drop is only 6%.
+
+**Cost and latency are regressions too.** Chasing pass rates while the bill doubles is a failure
+mode, so both are measured and reported — but neither can block, because neither is a correctness
+signal.
 
 ## Next
 
-Phase 3 builds the evaluation engine: async batched runner at `temperature=0` with `N=3` repeats,
-deterministic and model graders, judge calibration against the holdout, and the comparison layer
-(flip detection, McNemar's exact test, EWMA drift). It needs a locked dataset to run against.
+Phase 4 builds the HTML diff report and Slack alerting on top of these gate reports. The `make eval`
+entry point lands with it — the engine needs a locked dataset to run against.

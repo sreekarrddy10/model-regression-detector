@@ -51,15 +51,21 @@ path and one schema across vendors with the accounting intact.
 
 Run `make dataset-report` for live progress against every target.
 
-## Phase 3 — Evaluation engine (Days 4–7)
+## Phase 3 — Evaluation engine (Days 4–7) ✅
 
-- [ ] Async batched runner, bounded concurrency, retry/backoff, `temperature=0`, `N=3`
-- [ ] `graders/code.py` — category match, schema validity, latency, cost
-- [ ] `graders/judge.py` — DeepEval G-Eval 1–5 + rationale
-- [ ] `graders/calibration.py` — Cohen's κ / Spearman vs. human holdout; abort if κ < 0.60
-- [ ] `compare.py` — flip detection (≥2/3), McNemar exact, per-category delta, pass@1/@3/^3, EWMA
-- [ ] `store/sqlite.py` + `schema.sql` (`runs`, `case_results`, `judge_calibration`)
-- [ ] **Proof:** degrade v001→v002, engine reports drop at p<0.05 and names regressed case IDs
+- [x] `runner.py` — async, bounded concurrency, retry/backoff, `temperature=0`, `N=3`; a provider outage is recorded per attempt, never fatal
+- [x] `graders/code.py` — schema validity, category match, latency, cost
+- [x] `graders/judge.py` — 1–5 rubric + rationale **through the provider layer, not DeepEval** (D5)
+- [x] `graders/calibration.py` — quadratic-weighted κ / Spearman vs. human holdout; run aborts below κ 0.60
+- [x] `stats.py` — McNemar exact, weighted κ, Spearman, majority/flaky, pass@1/@k/^k, EWMA
+- [x] `compare.py` — flip detection (≥2/3), significance + effect size, full gate matrix
+- [x] `store/sqlite.py` + `schema.sql` — baseline selection filters on `dataset_hash`
+- [x] **Proof:** 25 gate tests encode each threshold's operational question; statistics verified against hand-computed values
+
+### Remaining for Phase 3
+
+- [ ] `MRD_TIER` wiring + `make eval` CLI entry point (needs a locked dataset)
+- [ ] **Proof (deferred):** degrade v001→v002, engine names the regressed case IDs at p<0.05 — needs real cases
 
 ## Phase 4 — Alerting & reporting (Days 7–9)
 
