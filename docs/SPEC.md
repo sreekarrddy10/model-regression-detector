@@ -98,7 +98,7 @@ class PromptConfig:      # prompts/classifier/v003.yaml
     few_shot: list[Example]
     commit_message: str  # why this version exists
 
-class TestCase:          # data/golden/emails.jsonl (one object per line)
+class GoldenCase:          # data/golden/emails.jsonl (one object per line)
     id: str              # "tc_0042" — stable forever
     input_email: str
     expected_category: Literal["billing", "technical", "account", "general"]
@@ -256,7 +256,7 @@ Mapped 1:1 to the guide's six phases. Each phase ends with a **proof artifact** 
 - [ ] Deliberate edge cases: two-category ambiguity, 5-word emails, heavy typos, mixed-language, sarcasm, empty body → tag `ambiguous` / `adversarial`
 - [ ] Mark ~12 cases `critical: true` (the ones that must never break)
 - [ ] `dataset.lock.json` with sha256 + per-difficulty counts; `judge_holdout.jsonl` with 20 human 1–5 summary scores
-- **Proof:** loader validates every line against `TestCase`; hash reproduces on re-run; difficulty distribution printed.
+- **Proof:** loader validates every line against `GoldenCase`; hash reproduces on re-run; difficulty distribution printed.
 
 ### Phase 3 — Evaluation engine · Days 4–7
 - [ ] Async batched runner with bounded concurrency + retry/backoff; `temperature=0`, `N=3`

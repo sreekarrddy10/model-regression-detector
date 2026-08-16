@@ -30,12 +30,26 @@ path and one schema across vendors with the accounting intact.
 
 ## Phase 2 — Golden dataset (Days 2–4)
 
-- [ ] 80–100 hand-written cases, 4 categories (NOT LLM-generated)
-- [ ] Edge cases tagged `ambiguous` / `adversarial`: two-category overlap, ultra-short, typo-heavy, mixed-language, sarcastic, empty body
-- [ ] ~12 cases marked `critical: true`
-- [ ] `data/golden/emails.jsonl` + `dataset.lock.json` (sha256, counts by difficulty)
-- [ ] `data/golden/judge_holdout.jsonl` — 20 human-scored summaries
-- [ ] **Proof:** loader validates every line; hash reproduces
+### Plumbing ✅ (built)
+
+- [x] `dataset/schema.py` — `GoldenCase`, `HoldoutSample`; frozen, `extra="forbid"`, `notes` required
+- [x] `dataset/loader.py` — JSONL parse, all errors aggregated with line numbers, duplicate id/email detection, **few-shot leakage guard**
+- [x] `dataset/hashing.py` — content hash + `dataset.lock.json`, `verify` refuses drifted ground truth
+- [x] `dataset/report.py` — coverage report; errors vs. warnings separated; holdout score-variance check
+- [x] `dataset/__main__.py` — CLI: `validate` · `report` · `lock` · `verify` · `new`
+- [x] `data/golden/AUTHORING.md` — how to write a case, edge cases worth covering, the two enforced rules
+- [x] **Proof:** leakage guard rejects a case copied from `v001` few-shot, live against the real prompt; every label change moves the hash
+
+### Authoring ⬜ (human, not automatable)
+
+- [ ] 80 hand-written cases, ≥12 per category — `make dataset-new ID=tc_00NN`
+- [ ] ≥12 `ambiguous`, ≥8 `adversarial`: two-category overlap, ultra-short, typo-heavy, mixed-language, sarcastic, empty body, buried request
+- [ ] ≥10 marked `critical: true`
+- [ ] 20 judge-holdout summaries scored 1–5 **with deliberate spread** — a flat holdout yields an undefined κ
+- [ ] `make dataset-report` shows READY
+- [ ] `make dataset-lock VERSION=v1`
+
+Run `make dataset-report` for live progress against every target.
 
 ## Phase 3 — Evaluation engine (Days 4–7)
 

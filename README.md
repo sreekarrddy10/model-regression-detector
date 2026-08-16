@@ -3,15 +3,16 @@
 CI/CD for model behavior. Every prompt change is evaluated against a human-labeled golden dataset;
 statistically significant quality regressions block the merge before bad outputs reach users.
 
-**Status: Phase 1 of 6 complete** — feature under test, provider abstraction, offline test tier.
-See [tasks/todo.md](tasks/todo.md) for the plan and [docs/SPEC.md](docs/SPEC.md) for the design.
+**Status: Phase 2 of 6** — feature, providers and offline tier done; golden-dataset tooling done,
+cases being authored by hand. See [tasks/todo.md](tasks/todo.md) and [docs/SPEC.md](docs/SPEC.md).
 
 ## Quick start
 
 ```bash
-make install    # uv venv @ 3.11 + dev tooling
-make test       # offline tier: 47 tests, no network, no API keys
-make lint       # ruff + black + isort + mypy --strict + bandit
+make install          # uv venv @ 3.11 + dev tooling
+make test             # offline tier: 94 tests, no network, no API keys
+make lint             # ruff + black + isort + mypy --strict + bandit
+make dataset-report   # golden dataset coverage and remaining gaps
 ```
 
 No API key is needed to run the test suite. That is deliberate — see *Cassettes* below.
@@ -23,7 +24,37 @@ No API key is needed to run the test suite. That is deliberate — see *Cassette
 | [src/mrd/prompts.py](src/mrd/prompts.py) | Versioned prompt artifacts loaded from `prompts/classifier/vNNN.yaml` |
 | [src/mrd/feature/](src/mrd/feature/) | The system under test: support email → `{category, summary}` |
 | [src/mrd/providers/](src/mrd/providers/) | One normalized contract over OpenAI and Anthropic |
+| [src/mrd/dataset/](src/mrd/dataset/) | Golden dataset validation, content hashing, coverage reporting |
 | [config/pricing.yaml](config/pricing.yaml) | Token prices as reviewable config, not hardcoded constants |
+
+## Golden dataset
+
+Ground truth is written by hand — see [data/golden/AUTHORING.md](data/golden/AUTHORING.md). Nothing
+in the codebase generates cases; a model-generated golden set only measures whether the model agrees
+with itself.
+
+```bash
+make dataset-new ID=tc_0007   # append a blank row to fill in
+make dataset-validate         # every error at once, with line numbers
+make dataset-report           # coverage against each target
+make dataset-lock VERSION=v1  # freeze ground truth
+```
+
+Two guards worth knowing about:
+
+**Leakage.** A case may not duplicate a few-shot example from any prompt version. The model was
+shown those answers, so such a case measures recall of the prompt rather than capability. The check
+is whitespace- and case-insensitive.
+
+**Drift.** `dataset.lock.json` records a SHA-256 over the semantic content of every case. `make
+dataset-verify` fails if ground truth changed, because runs scored against different ground truth
+are not comparable — otherwise a quiet label edit can masquerade as a model improvement. Reordering
+lines or reflowing JSON does not invalidate a baseline; changing any label, email or tag does.
+
+The judge holdout carries one non-obvious requirement: score a deliberate **spread** of quality.
+Agreement statistics need disagreement to measure, so a holdout scored 5/5 across the board yields
+an undefined κ and the judge would pass calibration without ever being tested. The report warns when
+the spread is too narrow.
 
 ## Three decisions worth knowing
 
@@ -74,6 +105,6 @@ in Phase 3 alongside the runner.
 
 ## Next
 
-Phase 2 builds the golden dataset: 80–100 hand-written, human-labeled cases with difficulty tags
-and a content hash. Ground truth is written by hand, never generated — that constraint is the whole
-premise of the project.
+Phase 3 builds the evaluation engine: async batched runner at `temperature=0` with `N=3` repeats,
+deterministic and model graders, judge calibration against the holdout, and the comparison layer
+(flip detection, McNemar's exact test, EWMA drift). It needs a locked dataset to run against.

@@ -1,9 +1,12 @@
-.PHONY: help venv install seed test lint fmt record eval clean
+.PHONY: help venv install seed test lint fmt record eval clean \
+        dataset-validate dataset-report dataset-lock dataset-verify dataset-new
 .DEFAULT_GOAL := help
 
 PY      := .venv/bin/python
 PYTEST  := .venv/bin/pytest
 TIER    ?= smoke
+VERSION ?= v1
+ID      ?= tc_0001
 
 help:
 	@grep -E '^[a-z-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -37,6 +40,22 @@ fmt: ## Apply formatting
 	.venv/bin/black src tests scripts
 	.venv/bin/isort src tests scripts
 	.venv/bin/ruff check --fix src tests scripts
+
+dataset-validate: ## Validate the golden dataset; every error with a line number
+	$(PY) -m mrd.dataset validate
+
+dataset-report: ## Coverage report and remaining gaps
+	$(PY) -m mrd.dataset report
+
+dataset-lock: ## Freeze ground truth: make dataset-lock VERSION=v1
+	$(PY) -m mrd.dataset lock --version $(VERSION)
+
+dataset-verify: ## Fail if the dataset drifted from its lock
+	$(PY) -m mrd.dataset verify
+
+dataset-new: ## Append a blank case row: make dataset-new ID=tc_0007
+	$(PY) -m mrd.dataset new --id $(ID) >> data/golden/emails.jsonl
+	@echo "Appended blank $(ID) to data/golden/emails.jsonl - now fill it in."
 
 record: ## Re-record cassettes from live providers (needs keys)
 	MRD_TIER=record $(PY) -c "raise SystemExit('Phase 3: wire the runner, then record via the runner')"
