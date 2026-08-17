@@ -52,6 +52,31 @@ jobs:
         # fails here rather than quietly costing money later.
         run: pytest -m unit --cov=src/mrd --cov-report=term-missing --cov-fail-under=80
 
+  report-render:
+    name: report renders
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv python install 3.11
+      - name: Install
+        run: uv pip install --system -e '.[dev,e2e]'
+      - name: Install chromium
+        run: playwright install --with-deps chromium
+      - name: Render the report in a browser
+        # The report is the primary human-facing artifact. String assertions
+        # prove the text is present; only a browser proves it is legible.
+        run: pytest -m e2e
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: report-screenshots-${{ github.run_id }}
+          path: artifacts/e2e/
+          retention-days: 14
+
   dataset:
     name: dataset integrity
     runs-on: ubuntu-latest

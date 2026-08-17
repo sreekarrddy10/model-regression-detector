@@ -1,4 +1,4 @@
-.PHONY: help venv install seed test lint fmt record eval clean demo-report docker-build \
+.PHONY: help venv install install-e2e seed test test-e2e lint fmt record eval clean demo-report docker-build \
         dataset-validate dataset-report dataset-lock dataset-verify dataset-new
 .DEFAULT_GOAL := help
 
@@ -20,11 +20,18 @@ install: venv ## Install the package and dev tooling
 install-providers: ## Add the live provider SDKs (needed for smoke/full/record)
 	uv pip install --python $(PY) -e '.[providers]'
 
+install-e2e: ## Add Playwright and a headless chromium for the report tests
+	uv pip install --python $(PY) -e '.[e2e]'
+	.venv/bin/playwright install chromium
+
 seed: ## Regenerate offline cassettes from deterministic stubs
 	$(PY) scripts/seed_cassettes.py
 
 test: ## Offline tier: no network, no API keys
 	$(PYTEST) -m unit --cov=src/mrd --cov-report=term-missing
+
+test-e2e: ## Render the HTML report in a real browser (needs make install-e2e)
+	$(PYTEST) -m e2e
 
 test-integration: ## Live tier: requires API keys
 	$(PYTEST) -m integration

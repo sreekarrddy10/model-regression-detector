@@ -13,6 +13,7 @@ make install          # uv venv @ 3.11 + dev tooling
 make test             # offline tier: 253 tests, no network, no API keys
 make lint             # ruff + black + isort + mypy --strict + bandit
 make dataset-report   # golden dataset coverage and remaining gaps
+make install-e2e      # Playwright + chromium, then: make test-e2e
 make demo-report      # regenerate docs/sample-report.html from a scripted regression
 make eval TIER=smoke  # run the gate (needs a locked dataset)
 ```
@@ -165,6 +166,14 @@ The Slack alert is built from the same `ReportData` structure, so the two views 
 about what happened. It never truncates silently — a reader who cannot tell 5 regressions from 40
 will under-react to the larger failure.
 
+Because the report is the primary human-facing artifact, it is tested in a real browser
+([tests/e2e/](tests/e2e/)) as well as by string assertions. `assert "McNemar exact" in page` proves
+the text exists; it proves nothing about whether the SVG trend line has non-zero height, whether the
+BLOCK banner actually renders red, whether dark mode clears WCAG AA contrast, or whether the
+side-by-side case columns stack on a phone. Those are the regressions a string check cannot see, so
+23 Playwright tests cover them and upload screenshots at three viewports and both colour schemes.
+Playwright is an optional extra — `pytest -m unit` runs unchanged without it.
+
 ## CI
 
 [.github/workflows/eval.yml](.github/workflows/eval.yml) runs four jobs.
@@ -173,6 +182,7 @@ will under-react to the larger failure.
 |---|---|---|
 | `quality` | every push — lint, types, bandit, offline tests, 80% coverage floor | free |
 | `dataset` | every push — validate the golden set, verify the lock hasn't drifted | free |
+| `report-render` | every push — render the HTML report in headless chromium | free |
 | `gate` (smoke) | `prompts/**` or `src/mrd/**` changed — 20 stratified cases, 1 repeat, no judge | cents |
 | `gate` (full) | PR → `main`, and nightly — every case × 3 repeats with the judge | ~$0.60 |
 

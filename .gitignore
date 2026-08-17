@@ -16,6 +16,8 @@ htmlcov/
 # Project artifacts
 data/runs.sqlite
 reports/*.html
+artifacts/
+test-results/
 
 # OS
 .DS_Store

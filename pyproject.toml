@@ -16,6 +16,9 @@ providers = [
     "openai>=1.40",
     "anthropic>=0.34",
 ]
+e2e = [
+    "pytest-playwright>=0.5",
+]
 dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
@@ -39,6 +42,7 @@ testpaths = ["tests"]
 markers = [
     "unit: offline tests, no network, cassette-backed",
     "integration: requires live provider API keys",
+    "e2e: renders the HTML report in a real browser",
 ]
 addopts = "-q --strict-markers"
 
