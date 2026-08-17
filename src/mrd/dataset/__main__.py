@@ -69,10 +69,30 @@ def cmd_verify(args: argparse.Namespace) -> int:
     return 0
 
 
+def next_case_id(path: Path) -> str:
+    """The lowest unused tc_NNNN id.
+
+    Authoring eighty cases should not also mean tracking eighty ids by hand,
+    and a mistyped id is a duplicate the loader will reject on the next run.
+    """
+    used = set()
+    if path.exists():
+        for raw in path.read_text(encoding="utf-8").splitlines():
+            if raw.strip():
+                try:
+                    used.add(json.loads(raw).get("id"))
+                except json.JSONDecodeError:
+                    continue
+    index = 1
+    while f"tc_{index:04d}" in used:
+        index += 1
+    return f"tc_{index:04d}"
+
+
 def cmd_new(args: argparse.Namespace) -> int:
     """Emit a blank case row for a human to fill in."""
     template = {
-        "id": args.id,
+        "id": args.id or next_case_id(args.cases),
         "input_email": "",
         "expected_category": "billing",
         "expected_summary": "",
@@ -87,22 +107,25 @@ def cmd_new(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="mrd.dataset", description=__doc__)
-    parser.add_argument("--cases", type=Path, default=DEFAULT_CASES)
-    parser.add_argument("--holdout", type=Path, default=DEFAULT_HOLDOUT)
-    parser.add_argument("--lock", type=Path, default=DEFAULT_LOCK)
-    parser.add_argument("--prompts", type=Path, default=DEFAULT_PROMPTS)
+    # Paths live on a shared parent so they can be passed after the subcommand,
+    # the order every other CLI accepts them in.
+    paths = argparse.ArgumentParser(add_help=False)
+    paths.add_argument("--cases", type=Path, default=DEFAULT_CASES)
+    paths.add_argument("--holdout", type=Path, default=DEFAULT_HOLDOUT)
+    paths.add_argument("--lock", type=Path, default=DEFAULT_LOCK)
+    paths.add_argument("--prompts", type=Path, default=DEFAULT_PROMPTS)
 
+    parser = argparse.ArgumentParser(prog="mrd.dataset", description=__doc__, parents=[paths])
     sub = parser.add_subparsers(dest="command", required=True)
-    sub.add_parser("validate", help="parse and validate; fail on any error")
-    sub.add_parser("report", help="coverage report with gaps")
-    sub.add_parser("verify", help="check the dataset against its lock file")
+    sub.add_parser("validate", help="parse and validate; fail on any error", parents=[paths])
+    sub.add_parser("report", help="coverage report with gaps", parents=[paths])
+    sub.add_parser("verify", help="check the dataset against its lock file", parents=[paths])
 
-    lock = sub.add_parser("lock", help="write the lock file")
+    lock = sub.add_parser("lock", help="write the lock file", parents=[paths])
     lock.add_argument("--version", default="v1")
 
-    new = sub.add_parser("new", help="print a blank case row")
-    new.add_argument("--id", required=True)
+    new = sub.add_parser("new", help="print a blank case row", parents=[paths])
+    new.add_argument("--id", default=None, help="default: the next unused tc_NNNN")
 
     return parser
 

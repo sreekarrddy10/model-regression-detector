@@ -35,6 +35,7 @@ class Report:
     holdout_count: int
     holdout_scores: tuple[int, ...]
     warnings: tuple[str, ...] = field(default=())
+    write_next: tuple[tuple[str, str], ...] = ()
 
     @property
     def ready(self) -> bool:
@@ -99,11 +100,58 @@ def _holdout_warnings(samples: Sequence[HoldoutSample]) -> list[str]:
     return warnings
 
 
+# Hardest first. Ambiguous and adversarial cases are both scarcer and far more
+# informative than easy ones: an all-easy set produces a confident pass rate that
+# cannot detect a real regression. Suggest them while motivation is high.
+_DIFFICULTY_PRIORITY = {"adversarial": 0, "ambiguous": 1, "easy": 2}
+
+_DIFFICULTY_TARGETS = {
+    "easy": TARGET_CASES - MIN_AMBIGUOUS - MIN_ADVERSARIAL,
+    "ambiguous": MIN_AMBIGUOUS,
+    "adversarial": MIN_ADVERSARIAL,
+}
+
+
+def _write_next(
+    category_counts: dict[str, int], difficulty_counts: dict[str, int]
+) -> tuple[tuple[str, str], ...]:
+    """The three (category, difficulty) pairs most starved of cases.
+
+    Shortfalls are normalized against their own targets, so a stratum needing
+    8 of 8 adversarial cases outranks one needing 12 of 60 easy ones. Without
+    normalizing, the largest bucket would always win and the hard cases would
+    all be left until last - which is exactly when they get skipped.
+    """
+
+    def shortfall(count: int, target: int) -> float:
+        return max(0.0, (target - count) / target) if target else 0.0
+
+    ranked = sorted(
+        (
+            (
+                shortfall(category_counts[category], MIN_PER_CATEGORY)
+                + shortfall(difficulty_counts[difficulty], _DIFFICULTY_TARGETS[difficulty]),
+                _DIFFICULTY_PRIORITY[difficulty],
+                category,
+                difficulty,
+            )
+            for category in CATEGORIES
+            for difficulty in DIFFICULTIES
+        ),
+        key=lambda s: (-s[0], s[1], s[2]),
+    )
+    return tuple(
+        (category, difficulty) for deficit, _, category, difficulty in ranked[:3] if deficit
+    )
+
+
 def build(dataset: Dataset, holdout: Sequence[HoldoutSample] = ()) -> Report:
+    by_category = {c: len(dataset.by_category(c)) for c in CATEGORIES}
+    by_difficulty = {d: len(dataset.by_difficulty(d)) for d in DIFFICULTIES}
     return Report(
         count=len(dataset),
-        by_category={c: len(dataset.by_category(c)) for c in CATEGORIES},
-        by_difficulty={d: len(dataset.by_difficulty(d)) for d in DIFFICULTIES},
+        by_category=by_category,
+        by_difficulty=by_difficulty,
         by_source={
             s: sum(1 for c in dataset if c.source == s) for s in ("handwritten", "from_failure")
         },
@@ -111,6 +159,7 @@ def build(dataset: Dataset, holdout: Sequence[HoldoutSample] = ()) -> Report:
         holdout_count=len(holdout),
         holdout_scores=tuple(s.human_score for s in holdout),
         warnings=tuple(_dataset_warnings(dataset) + _holdout_warnings(holdout)),
+        write_next=_write_next(by_category, by_difficulty),
     )
 
 
@@ -137,5 +186,10 @@ def render(report: Report) -> str:
         lines += [f"  - {w}" for w in report.warnings]
     else:
         lines.append("READY - all coverage targets met.")
+
+    if report.write_next:
+        lines += ["", "Write next:"]
+        lines += [f"  - {category} / {difficulty}" for category, difficulty in report.write_next]
+        lines.append("  (make dataset-new  appends a blank row with the next free id)")
 
     return "\n".join(lines) + "\n"

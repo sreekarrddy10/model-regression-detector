@@ -10,7 +10,7 @@ are being authored by hand; the gate activates the moment a dataset is locked. S
 
 ```bash
 make install          # uv venv @ 3.11 + dev tooling
-make test             # offline tier: 240 tests, no network, no API keys
+make test             # offline tier: 245 tests, no network, no API keys
 make lint             # ruff + black + isort + mypy --strict + bandit
 make dataset-report   # golden dataset coverage and remaining gaps
 make demo-report      # regenerate docs/sample-report.html from a scripted regression
@@ -193,7 +193,20 @@ The PR comment is updated in place via a hidden marker — a PR with eleven stac
 one nobody reads. The exit code is the gate verdict and nothing else; that is the whole contract
 with CI.
 
+## Reading
+
+- **[docs/DECISIONS.md](docs/DECISIONS.md)** — the eight decisions this system turns on, each with
+  the alternative it rejected and the test that proves it.
+- **[docs/writeup-slow-drift.md](docs/writeup-slow-drift.md)** — why per-run diffing is structurally
+  blind to the most common way a production LLM feature degrades, and why an uncalibrated judge
+  hides it.
+- **[docs/sample-report.html](docs/sample-report.html)** — a real diff report.
+- **[docs/SPEC.md](docs/SPEC.md)** — the full build specification.
+
 ## Next
 
-Phase 6: `docs/DECISIONS.md`, the walkthrough recording, and the write-up. Both remaining proofs —
-a blocked PR on GitHub and a `docker compose up` from a clean clone — need the golden cases written.
+Write the golden cases. `make dataset-report` shows progress against every target and names the
+three strata to write next. Everything downstream activates the moment `make dataset-lock` runs.
+
+Two proofs remain deferred: a blocked PR on GitHub (needs a remote and real cases) and
+`docker compose up` from a clean clone (the image has not yet been built).

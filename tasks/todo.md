@@ -93,11 +93,18 @@ Run `make dataset-report` for live progress against every target.
 
 ## Phase 6 — Portfolio polish (Days 11–12)
 
-- [ ] README as onboarding docs (not a tutorial)
-- [ ] `docs/DECISIONS.md` — D1–D4 with rejected alternatives
-- [ ] 3-min Loom: prompt edit → CI → Slack → diff report → merge blocked
-- [ ] Write-up: slow drift vs. per-run regression
-- [ ] **Proof:** clean clone → `docker compose up` → green run from README alone
+- [x] README as onboarding docs (not a tutorial)
+- [x] `docs/DECISIONS.md` — D1–D8, each with the alternative it rejected and the test that proves it
+- [x] `docs/writeup-slow-drift.md` — slow drift vs. per-run regression, and why an uncalibrated judge hides it
+- [ ] 3-min Loom: prompt edit → CI → Slack → diff report → merge blocked (needs real cases)
+- [ ] **Proof:** clean clone → `docker compose up` → green run from README alone (needs a Docker daemon)
+
+## Authoring ergonomics (added while setting up Phase 2 work)
+
+- [x] `dataset new` picks the next free `tc_NNNN` — no manual id bookkeeping across 80 cases
+- [x] Options may follow the subcommand (`mrd.dataset report --cases X`), the conventional order
+- [x] `dataset report` suggests the three scarcest strata, hardest first — shortfalls normalized
+      against their own targets so adversarial cases are not left until last
 
 ---
 
