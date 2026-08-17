@@ -3,17 +3,18 @@
 CI/CD for model behavior. Every prompt change is evaluated against a human-labeled golden dataset;
 statistically significant quality regressions block the merge before bad outputs reach users.
 
-**Status: Phase 4 of 6** — feature, providers, dataset tooling, evaluation engine and reporting
-are built. Golden cases are being authored by hand. See [tasks/todo.md](tasks/todo.md) and [docs/SPEC.md](docs/SPEC.md).
+**Status: Phase 5 of 6** — the whole pipeline is built and runs end to end offline. Golden cases
+are being authored by hand; the gate activates the moment a dataset is locked. See [tasks/todo.md](tasks/todo.md) and [docs/SPEC.md](docs/SPEC.md).
 
 ## Quick start
 
 ```bash
 make install          # uv venv @ 3.11 + dev tooling
-make test             # offline tier: 216 tests, no network, no API keys
+make test             # offline tier: 240 tests, no network, no API keys
 make lint             # ruff + black + isort + mypy --strict + bandit
 make dataset-report   # golden dataset coverage and remaining gaps
 make demo-report      # regenerate docs/sample-report.html from a scripted regression
+make eval TIER=smoke  # run the gate (needs a locked dataset)
 ```
 
 No API key is needed to run the test suite. That is deliberate — see *Cassettes* below.
@@ -33,6 +34,8 @@ No API key is needed to run the test suite. That is deliberate — see *Cassette
 | [src/mrd/store/](src/mrd/store/) | SQLite run history and baseline selection |
 | [src/mrd/report/](src/mrd/report/) | Single-file HTML diff report |
 | [src/mrd/alerts/](src/mrd/alerts/) | Slack Block Kit alerting |
+| [src/mrd/sampling.py](src/mrd/sampling.py) | Deterministic stratified tier selection |
+| [src/mrd/cli.py](src/mrd/cli.py) | The entry point CI calls |
 | [config/pricing.yaml](config/pricing.yaml) | Token prices as reviewable config, not hardcoded constants |
 
 ## Golden dataset
@@ -162,7 +165,35 @@ The Slack alert is built from the same `ReportData` structure, so the two views 
 about what happened. It never truncates silently — a reader who cannot tell 5 regressions from 40
 will under-react to the larger failure.
 
+## CI
+
+[.github/workflows/eval.yml](.github/workflows/eval.yml) runs four jobs.
+
+| Job | When | Cost |
+|---|---|---|
+| `quality` | every push — lint, types, bandit, offline tests, 80% coverage floor | free |
+| `dataset` | every push — validate the golden set, verify the lock hasn't drifted | free |
+| `gate` (smoke) | `prompts/**` or `src/mrd/**` changed — 20 stratified cases, 1 repeat, no judge | cents |
+| `gate` (full) | PR → `main`, and nightly — every case × 3 repeats with the judge | ~$0.60 |
+
+Running `full` on every push would cost more than it catches.
+
+Three details that matter operationally:
+
+**No API key is present in the `quality` job.** If a test reaches the network it fails there, rather
+than quietly costing money later.
+
+**The gate job caches `runs.sqlite`.** Without a restored baseline every run is a first run, and a
+first run can never detect a regression.
+
+**Smoke selection is deterministic**, stratified across category and difficulty, and always includes
+every `critical` case. Random sampling would report sampling churn as model change.
+
+The PR comment is updated in place via a hidden marker — a PR with eleven stacked eval comments is
+one nobody reads. The exit code is the gate verdict and nothing else; that is the whole contract
+with CI.
+
 ## Next
 
-Phase 5 wires the tiered GitHub Actions workflow and the `make eval` entry point, which needs a
-locked golden dataset to run against.
+Phase 6: `docs/DECISIONS.md`, the walkthrough recording, and the write-up. Both remaining proofs —
+a blocked PR on GitHub and a `docker compose up` from a clean clone — need the golden cases written.

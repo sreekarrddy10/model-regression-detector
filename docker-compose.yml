@@ -1,0 +1,16 @@
+services:
+  eval:
+    build: .
+    image: mrd:local
+    environment:
+      # Never bake keys into the image. Compose reads them from your .env,
+      # which .gitignore excludes.
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL:-}
+    volumes:
+      # Run history and the generated report persist on the host so a baseline
+      # survives the container.
+      - ./data:/app/data
+      - ./reports:/app/reports
+    command: ["eval", "--tier", "smoke", "--report", "/app/reports/report.html"]

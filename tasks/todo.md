@@ -77,13 +77,19 @@ Run `make dataset-report` for live progress against every target.
 - [x] `scripts/demo_report.py` + `make demo-report`
 - [x] **Proof:** [docs/sample-report.html](../docs/sample-report.html) — a real BLOCK report generated offline, well-formed, zero external references, zero script tags
 
-## Phase 5 — CI/CD (Days 9–11)
+## Phase 5 — CI/CD (Days 9–11) ✅ (except the live PR proof)
 
-- [ ] `.github/workflows/eval.yml` — unit (every push) / smoke (`prompts/**`,`src/**`) / full (PR→main + nightly)
-- [ ] Sticky PR comment with gate table; non-zero exit on BLOCK; HTML uploaded as artifact
-- [ ] Multi-stage Dockerfile (non-root, healthcheck) + docker-compose
-- [ ] `bandit -r src/` and `mypy src/` in pipeline
-- [ ] **Proof:** one PR blocked, one PR passed
+- [x] `cli.py` — the eval entry point CI calls; exit code is the gate verdict, nothing else
+- [x] `sampling.py` — deterministic stratified smoke selection; every critical case always included
+- [x] `report/markdown.py` — sticky PR comment with the scorecard, the statistics and the regressed-case table
+- [x] `.github/workflows/eval.yml` — quality (every push) / dataset integrity / smoke (`prompts/**`,`src/mrd/**`) / full (PR→main + nightly cron)
+- [x] Gate job caches `runs.sqlite` so a baseline exists; uploads the report artifact; updates its own PR comment in place
+- [x] `gate-skipped` job explains itself when no dataset is locked, instead of silently not running
+- [x] `bandit`, `mypy`, `ruff`, `black`, `isort`, coverage floor 80% all in the pipeline
+- [x] Multi-stage `Dockerfile` (non-root uid 10001, healthcheck, no dev deps in runtime) + `docker-compose.yml` + `.dockerignore`
+- [x] **Proof (local, verified):** locked an 8-case demo dataset, ran the CLI end to end offline — first run recorded a baseline and exited 0; a seeded regression exited **1** naming `tc_0000` as a critical regression; editing a label without re-locking exited **1** with "not comparable"
+- [ ] **Proof (deferred):** one PR blocked and one passed on GitHub — needs a remote and real cases
+- [ ] **Unverified:** the Docker image has not been built (no Docker daemon on this machine); YAML and COPY paths validated statically only
 
 ## Phase 6 — Portfolio polish (Days 11–12)
 

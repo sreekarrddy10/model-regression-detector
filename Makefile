@@ -1,4 +1,4 @@
-.PHONY: help venv install seed test lint fmt record eval clean demo-report \
+.PHONY: help venv install seed test lint fmt record eval clean demo-report docker-build \
         dataset-validate dataset-report dataset-lock dataset-verify dataset-new
 .DEFAULT_GOAL := help
 
@@ -61,15 +61,13 @@ demo-report: ## Regenerate docs/sample-report.html from a scripted regression
 	$(PY) scripts/demo_report.py || true
 
 record: ## Re-record cassettes from live providers (needs keys)
-	@echo "Recording runs through the eval CLI, which lands with Phase 5."
-	@exit 1
+	$(PY) -m mrd.cli eval --tier smoke --no-slack
 
-eval: ## Run the eval suite end to end
-	@echo "The engine, gate and reporting are built and tested, but the CLI entry"
-	@echo "point needs a locked golden dataset to run against."
-	@echo "Progress:  make dataset-report"
-	@echo "Sample of the output it produces:  docs/sample-report.html"
-	@exit 1
+eval: ## Run the eval suite and apply the gate: make eval TIER=smoke
+	$(PY) -m mrd.cli eval --tier $(TIER) --git-sha $$(git rev-parse HEAD 2>/dev/null || echo unknown)
+
+docker-build: ## Build the runtime image
+	docker build -t mrd:local .
 
 clean:
 	rm -rf .venv .pytest_cache .mypy_cache .ruff_cache .coverage htmlcov

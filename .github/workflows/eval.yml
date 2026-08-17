@@ -1,0 +1,186 @@
+name: eval
+
+# Three tiers, priced differently (docs/SPEC.md 3.5):
+#   quality  - lint, types, security, offline tests. No network, no keys, free.
+#   smoke    - 20 stratified cases, 1 repeat, no judge. Runs when the prompt or
+#              the harness changes. Cents.
+#   full     - every case x 3 repeats with the judge. PRs into main, and nightly.
+# Running `full` on every push would cost more than it catches.
+
+on:
+  push:
+    branches-ignore: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: eval-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  UV_SYSTEM_PYTHON: 1
+
+jobs:
+  quality:
+    name: quality (offline)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv python install 3.11
+      - name: Install
+        run: uv pip install --system -e '.[dev]'
+      - name: Lint
+        run: |
+          ruff check src tests scripts
+          black --check src tests scripts
+          isort --check-only src tests scripts
+      - name: Types
+        run: mypy
+      - name: Security
+        run: bandit -q -r src
+      - name: Offline tests
+        # No API key is present in this job. If a test reaches the network it
+        # fails here rather than quietly costing money later.
+        run: pytest -m unit --cov=src/mrd --cov-report=term-missing --cov-fail-under=80
+
+  dataset:
+    name: dataset integrity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv python install 3.11
+      - run: uv pip install --system -e '.'
+      - name: Validate golden dataset
+        run: python -m mrd.dataset validate
+      - name: Verify the lock
+        # Ground truth changed without a version bump means every historical
+        # baseline silently stopped being comparable.
+        run: |
+          if [ -f data/golden/dataset.lock.json ]; then
+            python -m mrd.dataset verify
+          else
+            echo "::notice::no dataset lock yet; skipping drift check"
+          fi
+      - name: Coverage report
+        run: python -m mrd.dataset report
+
+  tier:
+    name: choose tier
+    runs-on: ubuntu-latest
+    outputs:
+      tier: ${{ steps.pick.outputs.tier }}
+      locked: ${{ steps.pick.outputs.locked }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - id: pick
+        run: |
+          if [ -f data/golden/dataset.lock.json ]; then
+            echo "locked=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "locked=false" >> "$GITHUB_OUTPUT"
+          fi
+          if [ "${{ github.event_name }}" = "pull_request" ] \
+             || [ "${{ github.event_name }}" = "schedule" ] \
+             || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tier=full" >> "$GITHUB_OUTPUT"
+          elif git diff --name-only HEAD~1 HEAD | grep -qE '^(prompts/|src/mrd/)'; then
+            echo "tier=smoke" >> "$GITHUB_OUTPUT"
+          else
+            echo "tier=none" >> "$GITHUB_OUTPUT"
+          fi
+
+  gate:
+    name: eval gate
+    needs: [quality, dataset, tier]
+    if: needs.tier.outputs.tier != 'none' && needs.tier.outputs.locked == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv python install 3.11
+      - run: uv pip install --system -e '.[providers]'
+
+      - name: Restore run history
+        # The gate needs a baseline. Without a cached database every run is a
+        # first run, and a first run can never detect a regression.
+        uses: actions/cache@v4
+        with:
+          path: data/runs.sqlite
+          key: mrd-runs-${{ github.ref_name }}-${{ github.run_id }}
+          restore-keys: |
+            mrd-runs-${{ github.ref_name }}-
+            mrd-runs-main-
+
+      - name: Run eval
+        id: eval
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          python -m mrd.cli eval \
+            --tier "${{ needs.tier.outputs.tier }}" \
+            --git-sha "${{ github.sha }}" \
+            --report reports/report.html \
+            --comment reports/comment.md \
+            --report-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+      - name: Upload diff report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-report-${{ github.run_id }}
+          path: reports/
+          retention-days: 30
+
+      - name: Comment on the PR
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const marker = '<!-- mrd-eval-report -->';
+            if (!fs.existsSync('reports/comment.md')) return;
+            const body = fs.readFileSync('reports/comment.md', 'utf8');
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const existing = await github.paginate(
+              github.rest.issues.listComments, { owner, repo, issue_number });
+            // Update in place: a PR with eleven stacked eval comments is one
+            // nobody reads.
+            const mine = existing.find(c => c.body && c.body.includes(marker));
+            if (mine) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: mine.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }
+
+  gate-skipped:
+    name: eval gate
+    needs: [tier]
+    if: needs.tier.outputs.locked != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Explain
+        run: |
+          echo "::notice title=Eval gate inactive::No locked golden dataset. \
+          Author cases (make dataset-report) and run make dataset-lock to activate the gate."
