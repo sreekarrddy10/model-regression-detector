@@ -224,3 +224,71 @@ def test_edited_prompt_misses_its_old_cassette(tmp_path: Path) -> None:
     edited = replace(REQUEST, system=REQUEST.system + " Be concise.")
     with pytest.raises(CassetteMiss):
         run(CassetteProvider(tmp_path).complete(edited))
+
+
+# --------------------------------------------------------------------------- #
+# Config discovery
+# --------------------------------------------------------------------------- #
+
+
+def test_pricing_path_prefers_an_explicit_override(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv(pricing.ENV_VAR, str(tmp_path / "custom.yaml"))
+    assert pricing.default_path() == tmp_path / "custom.yaml"
+
+
+def test_pricing_path_falls_back_to_the_working_directory(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """How the container finds it: WORKDIR holds config/, not site-packages."""
+    monkeypatch.delenv(pricing.ENV_VAR, raising=False)
+    (tmp_path / "config").mkdir()
+    (tmp_path / "config" / "pricing.yaml").write_text("models: {}", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    assert pricing.default_path() == tmp_path / "config" / "pricing.yaml"
+
+
+def test_pricing_path_falls_back_to_the_source_tree(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, repo_root: Path
+) -> None:
+    monkeypatch.delenv(pricing.ENV_VAR, raising=False)
+    monkeypatch.chdir(tmp_path)
+
+    assert pricing.default_path() == repo_root / "config" / "pricing.yaml"
+
+
+def test_default_pricing_resolves_from_the_repo(repo_root: Path) -> None:
+    """The regression the container build caught: lookup returning None silently."""
+    import os
+
+    previous = os.getcwd()
+    try:
+        os.chdir(repo_root)
+        pricing._load.cache_clear()  # noqa: SLF001
+        assert pricing.lookup("gpt-4o-mini") is not None
+    finally:
+        os.chdir(previous)
+        pricing._load.cache_clear()  # noqa: SLF001
+
+
+def test_resolver_returns_the_working_directory_candidate_when_nothing_exists(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Error messages should name the path a user would expect to create."""
+    from mrd import paths
+
+    monkeypatch.chdir(tmp_path)
+    assert paths.resolve("data/golden/nothing.jsonl") == tmp_path / "data/golden/nothing.jsonl"
+
+
+def test_resolver_prefers_cwd_over_the_source_tree(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The container mounts data beside WORKDIR; site-packages must not win."""
+    from mrd import paths
+
+    (tmp_path / "prompts").mkdir()
+    monkeypatch.chdir(tmp_path)
+    assert paths.resolve("prompts") == tmp_path / "prompts"

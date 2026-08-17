@@ -14,8 +14,16 @@ from typing import Any
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from . import paths
+
 _VERSION_RE = re.compile(r"^v\d{3}$")
-_PROMPT_ROOT = Path(__file__).resolve().parents[2] / "prompts"
+
+ENV_VAR = "MRD_PROMPTS_PATH"
+
+
+def default_root() -> Path:
+    """Where to look for prompt versions. See mrd.paths.resolve."""
+    return paths.resolve("prompts", env_var=ENV_VAR)
 
 
 class Example(BaseModel):
@@ -87,12 +95,12 @@ class PromptConfig(BaseModel):
     def load(
         cls, version_id: str, *, feature: str = "classifier", root: Path | None = None
     ) -> PromptConfig:
-        base = root or _PROMPT_ROOT
+        base = root or default_root()
         return cls.from_file(base / feature / f"{version_id}.yaml")
 
     @classmethod
     def latest(cls, *, feature: str = "classifier", root: Path | None = None) -> PromptConfig:
-        base = (root or _PROMPT_ROOT) / feature
+        base = (root or default_root()) / feature
         versions = sorted(base.glob("v*.yaml"))
         if not versions:
             raise FileNotFoundError(f"no prompt versions found in {base}")

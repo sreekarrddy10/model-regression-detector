@@ -10,7 +10,7 @@ are being authored by hand; the gate activates the moment a dataset is locked. S
 
 ```bash
 make install          # uv venv @ 3.11 + dev tooling
-make test             # offline tier: 245 tests, no network, no API keys
+make test             # offline tier: 253 tests, no network, no API keys
 make lint             # ruff + black + isort + mypy --strict + bandit
 make dataset-report   # golden dataset coverage and remaining gaps
 make demo-report      # regenerate docs/sample-report.html from a scripted regression
@@ -208,5 +208,22 @@ with CI.
 Write the golden cases. `make dataset-report` shows progress against every target and names the
 three strata to write next. Everything downstream activates the moment `make dataset-lock` runs.
 
-Two proofs remain deferred: a blocked PR on GitHub (needs a remote and real cases) and
-`docker compose up` from a clean clone (the image has not yet been built).
+One proof remains deferred: a blocked PR on GitHub, which needs a remote and real cases.
+
+## Container
+
+```bash
+make docker-build
+docker compose run --rm eval          # reads ./data, writes ./reports
+```
+
+The runtime image carries no build tooling and no dev dependencies, runs as uid 10001, and
+healthchecks by asserting that its pricing config and prompt versions actually resolved — not
+merely that Python starts.
+
+That healthcheck earned its place immediately. The first build revealed that pricing, prompts and
+the CLI defaults all resolved paths from `__file__`, which is correct in a source checkout and
+silently wrong in an installed wheel. The original healthcheck reported `ok` through it, because it
+called `lookup()` without checking the result. [`src/mrd/paths.py`](src/mrd/paths.py) now provides
+one resolver with one precedence order — env override, then working directory, then source tree —
+and the healthcheck asserts.

@@ -16,11 +16,17 @@ from pathlib import Path
 
 import yaml
 
+from .. import paths
 from .base import Usage
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_PATH = Path(__file__).resolve().parents[3] / "config" / "pricing.yaml"
+ENV_VAR = "MRD_PRICING_PATH"
+
+
+def default_path() -> Path:
+    """Where to look for pricing. See mrd.paths.resolve for the search order."""
+    return paths.resolve("config/pricing.yaml", env_var=ENV_VAR)
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,7 +60,7 @@ def _load(path: str) -> dict[str, Price]:
 
 
 def lookup(model: str, *, path: Path | None = None) -> Price | None:
-    prices = _load(str(path or _DEFAULT_PATH))
+    prices = _load(str(path or default_path()))
     price = prices.get(model)
     if price is None:
         logger.warning(

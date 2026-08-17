@@ -16,7 +16,7 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
-from . import sampling
+from . import paths, sampling
 from .alerts import slack
 from .compare import GateReport, IncomparableRuns, Verdict, compare, evaluate
 from .dataset import hashing
@@ -31,17 +31,19 @@ from .store import sqlite
 
 logger = logging.getLogger("mrd")
 
-ROOT = Path(__file__).resolve().parents[2]
-DEFAULTS = {
-    "cases": ROOT / "data" / "golden" / "emails.jsonl",
-    "holdout": ROOT / "data" / "golden" / "judge_holdout.jsonl",
-    "lock": ROOT / "data" / "golden" / "dataset.lock.json",
-    "prompts": ROOT / "prompts",
-    "cassettes": ROOT / "tests" / "cassettes",
-    "db": ROOT / "data" / "runs.sqlite",
-    "report": ROOT / "reports" / "report.html",
-    "comment": ROOT / "reports" / "comment.md",
-}
+
+def _defaults() -> dict[str, Path]:
+    """Resolved at call time, not import time, so tests and containers can chdir."""
+    return {
+        "cases": paths.resolve("data/golden/emails.jsonl"),
+        "holdout": paths.resolve("data/golden/judge_holdout.jsonl"),
+        "lock": paths.resolve("data/golden/dataset.lock.json"),
+        "prompts": paths.resolve("prompts", env_var="MRD_PROMPTS_PATH"),
+        "cassettes": paths.resolve("tests/cassettes"),
+        "db": paths.resolve("data/runs.sqlite"),
+        "report": paths.resolve("reports/report.html"),
+        "comment": paths.resolve("reports/comment.md"),
+    }
 
 
 def _out(text: str) -> None:
@@ -201,7 +203,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_cmd.add_argument("--git-sha", default="unknown")
     run_cmd.add_argument("--report-url", default=None)
     run_cmd.add_argument("--no-slack", action="store_true")
-    for name, default in DEFAULTS.items():
+    for name, default in _defaults().items():
         run_cmd.add_argument(f"--{name}", type=Path, default=default)
 
     return parser

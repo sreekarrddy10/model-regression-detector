@@ -69,3 +69,36 @@ def test_version_id_must_match_filename(tmp_path: Path, prompt_v001: PromptConfi
 def test_latest_returns_highest_version(repo_root: Path) -> None:
     latest = PromptConfig.latest(root=repo_root / "prompts")
     assert latest.version_id == "v001"
+
+
+def test_prompt_root_prefers_an_explicit_override(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from mrd import prompts
+
+    monkeypatch.setenv(prompts.ENV_VAR, str(tmp_path / "elsewhere"))
+    assert prompts.default_root() == tmp_path / "elsewhere"
+
+
+def test_prompt_root_falls_back_to_the_working_directory(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """How the container finds them: WORKDIR holds prompts/, not site-packages."""
+    from mrd import prompts
+
+    monkeypatch.delenv(prompts.ENV_VAR, raising=False)
+    (tmp_path / "prompts").mkdir()
+    monkeypatch.chdir(tmp_path)
+
+    assert prompts.default_root() == tmp_path / "prompts"
+
+
+def test_prompt_root_falls_back_to_the_source_tree(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, repo_root: Path
+) -> None:
+    from mrd import prompts
+
+    monkeypatch.delenv(prompts.ENV_VAR, raising=False)
+    monkeypatch.chdir(tmp_path)
+
+    assert prompts.default_root() == repo_root / "prompts"

@@ -89,7 +89,17 @@ Run `make dataset-report` for live progress against every target.
 - [x] Multi-stage `Dockerfile` (non-root uid 10001, healthcheck, no dev deps in runtime) + `docker-compose.yml` + `.dockerignore`
 - [x] **Proof (local, verified):** locked an 8-case demo dataset, ran the CLI end to end offline — first run recorded a baseline and exited 0; a seeded regression exited **1** naming `tc_0000` as a critical regression; editing a label without re-locking exited **1** with "not comparable"
 - [ ] **Proof (deferred):** one PR blocked and one passed on GitHub — needs a remote and real cases
-- [ ] **Unverified:** the Docker image has not been built (no Docker daemon on this machine); YAML and COPY paths validated statically only
+- [x] **Docker verified:** `mrd:local` builds (576 MB); runs as uid 10001; no dev tooling in the runtime layer; provider SDKs present; healthcheck asserts and fails correctly when config is unreachable; `docker compose config` valid
+
+### Bug the container build caught
+
+Three modules resolved project paths from `__file__` alone. Correct in a source checkout,
+silently wrong in an installed wheel where the code sits in `site-packages` and the data is
+mounted beside the working directory. Pricing and prompts both failed to load in the image, and
+the original healthcheck **printed `ok` anyway** because it called `lookup()` without checking
+the result — precisely the failure it existed to catch. Fixed by `src/mrd/paths.py`: one
+resolver, one precedence order (env override → working directory → source tree), used by
+pricing, prompts and both CLIs.
 
 ## Phase 6 — Portfolio polish (Days 11–12)
 
@@ -97,7 +107,7 @@ Run `make dataset-report` for live progress against every target.
 - [x] `docs/DECISIONS.md` — D1–D8, each with the alternative it rejected and the test that proves it
 - [x] `docs/writeup-slow-drift.md` — slow drift vs. per-run regression, and why an uncalibrated judge hides it
 - [ ] 3-min Loom: prompt edit → CI → Slack → diff report → merge blocked (needs real cases)
-- [ ] **Proof:** clean clone → `docker compose up` → green run from README alone (needs a Docker daemon)
+- [x] **Proof:** image builds; eval runs inside the container against mounted data, exiting 0 clean and 1 on a seeded critical regression; Docker's own HEALTHCHECK reaches `healthy`
 
 ## Authoring ergonomics (added while setting up Phase 2 work)
 

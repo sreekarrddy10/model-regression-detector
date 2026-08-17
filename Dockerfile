@@ -32,11 +32,13 @@ COPY --chown=mrd:mrd data ./data
 
 USER mrd
 
-# Proves the package imports and the pricing config parses. A container that
-# starts but cannot load its own configuration is worse than one that fails.
+# Proves the package imports AND that pricing actually resolved. An earlier
+# version called lookup() without checking the result - it printed "ok" while
+# the config was unreachable, which is precisely the failure this is here to
+# catch. A healthcheck that cannot fail is decoration.
+COPY --chown=mrd:mrd docker/healthcheck.py /app/healthcheck.py
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-    CMD python -c "import mrd, mrd.cli; from mrd.providers import pricing; \
-        pricing.lookup('gpt-4o-mini'); print('ok')" || exit 1
+    CMD ["python", "/app/healthcheck.py"]
 
 ENTRYPOINT ["python", "-m", "mrd.cli"]
 CMD ["eval", "--tier", "smoke"]

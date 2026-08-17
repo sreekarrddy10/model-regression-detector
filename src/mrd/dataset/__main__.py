@@ -15,14 +15,14 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
+from .. import paths
 from . import hashing, report
 from .loader import DatasetValidationError, load_cases, load_holdout
 
-ROOT = Path(__file__).resolve().parents[3]
-DEFAULT_CASES = ROOT / "data" / "golden" / "emails.jsonl"
-DEFAULT_HOLDOUT = ROOT / "data" / "golden" / "judge_holdout.jsonl"
-DEFAULT_LOCK = ROOT / "data" / "golden" / "dataset.lock.json"
-DEFAULT_PROMPTS = ROOT / "prompts"
+DEFAULT_CASES = paths.resolve("data/golden/emails.jsonl")
+DEFAULT_HOLDOUT = paths.resolve("data/golden/judge_holdout.jsonl")
+DEFAULT_LOCK = paths.resolve("data/golden/dataset.lock.json")
+DEFAULT_PROMPTS = paths.resolve("prompts", env_var="MRD_PROMPTS_PATH")
 
 
 def _out(text: str) -> None:
