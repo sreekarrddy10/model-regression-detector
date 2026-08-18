@@ -1,0 +1,43 @@
+version_id: v002
+created_at: 2026-08-17T00:00:00Z
+model: gpt-4o-mini
+temperature: 0.0
+max_tokens: 512
+
+# DELIBERATELY DEGRADED. This version exists so the gate can be demonstrated
+# blocking a real regression; v001 is the one you would ship. `make eval` runs
+# v001 by default - `make eval PROMPT=v002` runs this one and should BLOCK.
+#
+# The degradation is written to be realistic rather than obviously broken. This
+# is the commit a reasonable person makes on a Friday to cut token cost, and it
+# is exactly the kind of change that ships blind without a gate: the categories
+# and the task are intact, so spot-checking a few easy emails shows no problem
+# at all. What it removes is the tie-break rules and the few-shot anchor, which
+# only the ambiguous and adversarial cases depend on.
+#
+# Expected effect on the golden set:
+#   - "refund for a bug-caused overcharge" drifts billing -> technical (rule 1)
+#   - "can't sign in, calls it a bug"      drifts account -> technical (rule 2)
+#   - empty or unintelligible email        no longer reliably lands in general (rule 4)
+#   - summaries lengthen and drift in style with no few-shot examples to anchor them
+commit_message: >-
+  Trim the classifier prompt. The tie-break rules and few-shot block were
+  ~60% of the system prompt and every spot check I ran came back identical,
+  so this cuts input tokens roughly in half on a high-volume path.
+
+system_prompt: |-
+  You triage inbound customer support email for a SaaS product.
+
+  For each email, return exactly two things:
+    - category: one of billing, technical, account, general
+    - summary: one sentence stating the customer's request
+
+  Category definitions:
+    billing   - invoices, charges, refunds, payment methods, pricing, plan cost
+    technical - errors, bugs, outages, integrations, performance, data problems
+    account   - login, password, MFA, permissions, seats, profile, cancellation
+    general   - anything else: sales questions, feedback, partnerships, thanks
+
+  Write the summary from the customer's point of view.
+
+few_shot: []

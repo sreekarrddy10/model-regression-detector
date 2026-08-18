@@ -109,6 +109,13 @@ pricing, prompts and both CLIs.
 - [ ] 3-min Loom: prompt edit → CI → Slack → diff report → merge blocked (needs real cases)
 - [x] **Proof:** image builds; eval runs inside the container against mounted data, exiting 0 clean and 1 on a seeded critical regression; Docker's own HEALTHCHECK reaches `healthy`
 
+## Developer loop
+
+- [x] `.claude/settings.json` + `.claude/hooks/format-python.sh` — PostToolUse black · isort ·
+      ruff --fix on any `.py` edit, then a package type-check. Non-blocking by design: a formatter
+      that blocks an edit is worse than an unformatted file, and `make lint` plus CI are the
+      enforcement points. Exits early for non-Python files, and survives malformed payloads.
+
 ## Authoring ergonomics (added while setting up Phase 2 work)
 
 - [x] `dataset new` picks the next free `tc_NNNN` — no manual id bookkeeping across 80 cases
@@ -120,12 +127,17 @@ pricing, prompts and both CLIs.
 
 ## Definition of Done
 
-- [ ] `make eval TIER=full` reproducible from config alone
-- [ ] Coverage ≥ 80%; ruff / black --check / mypy / bandit clean
-- [ ] Judge κ ≥ 0.60 recorded in repo
-- [ ] Blocked PR + passed PR linked from README
-- [ ] `docker compose up` works from clean clone
-- [ ] Loom recorded, DECISIONS.md written, lessons.md non-empty
+- [x] Coverage ≥ 80% (96%); ruff / black --check / isort / mypy --strict / bandit clean
+- [x] `docker compose` works from a clean build — image verified, gate exits 0 clean and 1 on a seeded regression
+- [x] `docs/DECISIONS.md` written (D1–D8, each with its rejected alternative)
+- [x] `tasks/lessons.md` non-empty
+- [x] The degraded `v002` prompt exists, so the gate demo is one command
+- [ ] `make eval TIER=full` reproducible from config alone — **blocked on the golden cases**
+- [ ] Judge κ ≥ 0.60 recorded in repo — **blocked on the 20 holdout summaries**
+- [ ] Blocked PR + passed PR linked from README — **blocked on cases + a git remote**
+- [ ] Loom recorded — **blocked on the above**
+
+Everything unchecked traces to one dependency: the hand-written golden cases.
 
 ---
 

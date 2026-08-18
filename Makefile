@@ -5,6 +5,9 @@
 PY      := .venv/bin/python
 PYTEST  := .venv/bin/pytest
 TIER    ?= smoke
+# v001 explicitly, not "latest": v002 is the deliberately degraded demo variant,
+# and the default invocation must not silently run a prompt the gate blocks.
+PROMPT  ?= v001
 VERSION ?= v1
 ID      ?= tc_0001
 
@@ -70,8 +73,9 @@ demo-report: ## Regenerate docs/sample-report.html from a scripted regression
 record: ## Re-record cassettes from live providers (needs keys)
 	$(PY) -m mrd.cli eval --tier smoke --no-slack
 
-eval: ## Run the eval suite and apply the gate: make eval TIER=smoke
-	$(PY) -m mrd.cli eval --tier $(TIER) --git-sha $$(git rev-parse HEAD 2>/dev/null || echo unknown)
+eval: ## Run the gate: make eval TIER=smoke [PROMPT=v002 for the degraded demo]
+	$(PY) -m mrd.cli eval --tier $(TIER) --prompt $(PROMPT) \
+		--git-sha $$(git rev-parse HEAD 2>/dev/null || echo unknown)
 
 docker-build: ## Build the runtime image
 	docker build -t mrd:local .

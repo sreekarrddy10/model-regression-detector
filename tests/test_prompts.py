@@ -68,7 +68,43 @@ def test_version_id_must_match_filename(tmp_path: Path, prompt_v001: PromptConfi
 
 def test_latest_returns_highest_version(repo_root: Path) -> None:
     latest = PromptConfig.latest(root=repo_root / "prompts")
-    assert latest.version_id == "v001"
+    versions = sorted(p.stem for p in (repo_root / "prompts" / "classifier").glob("v*.yaml"))
+    assert latest.version_id == versions[-1]
+
+
+def test_the_shipping_prompt_is_pinned_not_latest() -> None:
+    """v002 is the deliberately degraded demo variant.
+
+    `latest()` returns it because it genuinely is the newest version, which is
+    correct - the Makefile pins PROMPT=v001 so the default invocation never
+    silently runs a prompt the gate is supposed to block.
+    """
+    from pathlib import Path as _Path
+
+    makefile = (_Path(__file__).resolve().parents[1] / "Makefile").read_text(encoding="utf-8")
+    assert "PROMPT  ?= v001" in makefile
+
+
+def test_degraded_variant_is_actually_degraded(repo_root: Path) -> None:
+    """If v002 stops being weaker than v001, the gate demo proves nothing."""
+    good = PromptConfig.load("v001", root=repo_root / "prompts")
+    degraded = PromptConfig.load("v002", root=repo_root / "prompts")
+
+    assert degraded.few_shot == (), "v002 must drop the few-shot anchor"
+    assert good.few_shot, "v001 must keep it"
+    assert len(degraded.system_prompt) < len(good.system_prompt)
+
+    # The category definitions survive - that is what makes the degradation
+    # realistic and hard to spot. What must be gone is the disambiguation.
+    assert "billing" in degraded.system_prompt
+    for removed in (
+        "Tie-break rules",
+        "even if a bug caused it",
+        "even if they call it a bug",
+        "Do not invent details",
+    ):
+        assert removed in good.system_prompt, f"v001 lost {removed!r}"
+        assert removed not in degraded.system_prompt, f"v002 still has {removed!r}"
 
 
 def test_prompt_root_prefers_an_explicit_override(
