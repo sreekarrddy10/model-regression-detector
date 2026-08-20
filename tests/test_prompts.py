@@ -72,23 +72,22 @@ def test_latest_returns_highest_version(repo_root: Path) -> None:
     assert latest.version_id == versions[-1]
 
 
-def test_the_shipping_prompt_is_pinned_not_latest() -> None:
-    """v002 is the deliberately degraded demo variant.
+def test_the_degraded_fixture_is_not_in_the_shipping_lineage(repo_root: Path) -> None:
+    """CI does not pass --prompt, so latest() must never resolve to a demo prompt.
 
-    `latest()` returns it because it genuinely is the newest version, which is
-    correct - the Makefile pins PROMPT=v001 so the default invocation never
-    silently runs a prompt the gate is supposed to block.
+    This regressed once: v002 lived in prompts/classifier/, latest() returned it,
+    and every CI run would have evaluated the known-bad prompt as its candidate.
     """
-    from pathlib import Path as _Path
-
-    makefile = (_Path(__file__).resolve().parents[1] / "Makefile").read_text(encoding="utf-8")
-    assert "PROMPT  ?= v001" in makefile
+    shipping = sorted(p.name for p in (repo_root / "prompts" / "classifier").glob("v*.yaml"))
+    assert "v002.yaml" not in shipping
+    assert (repo_root / "prompts" / "demo" / "classifier" / "v002.yaml").exists()
+    assert PromptConfig.latest(root=repo_root / "prompts").version_id == "v001"
 
 
 def test_degraded_variant_is_actually_degraded(repo_root: Path) -> None:
     """If v002 stops being weaker than v001, the gate demo proves nothing."""
     good = PromptConfig.load("v001", root=repo_root / "prompts")
-    degraded = PromptConfig.load("v002", root=repo_root / "prompts")
+    degraded = PromptConfig.load("v002", root=repo_root / "prompts" / "demo")
 
     assert degraded.few_shot == (), "v002 must drop the few-shot anchor"
     assert good.few_shot, "v001 must keep it"

@@ -4,9 +4,15 @@ model: gpt-4o-mini
 temperature: 0.0
 max_tokens: 512
 
-# DELIBERATELY DEGRADED. This version exists so the gate can be demonstrated
-# blocking a real regression; v001 is the one you would ship. `make eval` runs
-# v001 by default - `make eval PROMPT=v002` runs this one and should BLOCK.
+# DELIBERATELY DEGRADED - a demo fixture, deliberately kept OUT of
+# prompts/classifier/ so it can never be picked up as the shipping prompt.
+#
+# It lived in the real lineage briefly, which was a bug: PromptConfig.latest()
+# returned it, and CI does not pass --prompt, so every CI run would have
+# evaluated this known-bad prompt as its candidate and blocked every PR for a
+# reason unrelated to the PR. Run it explicitly instead:
+#
+#     make eval-demo
 #
 # The degradation is written to be realistic rather than obviously broken. This
 # is the commit a reasonable person makes on a Friday to cut token cost, and it

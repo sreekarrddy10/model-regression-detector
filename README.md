@@ -16,8 +16,8 @@ make dataset-report   # golden dataset coverage and remaining gaps
 make install-e2e      # Playwright + chromium, then: make test-e2e
 make test-e2e-all     # the report in chromium + firefox + webkit
 make demo-report      # regenerate docs/sample-report.html from a scripted regression
-make eval TIER=smoke  # run the gate on v001 (needs a locked dataset)
-make eval PROMPT=v002 # run the deliberately degraded variant — should BLOCK
+make eval TIER=smoke  # run the gate (needs a locked dataset)
+make eval-demo        # run the degraded fixture prompt — should BLOCK
 ```
 
 No API key is needed to run the test suite. That is deliberate — see *Cassettes* below.
@@ -39,7 +39,8 @@ No API key is needed to run the test suite. That is deliberate — see *Cassette
 | [src/mrd/alerts/](src/mrd/alerts/) | Slack Block Kit alerting |
 | [src/mrd/sampling.py](src/mrd/sampling.py) | Deterministic stratified tier selection |
 | [src/mrd/cli.py](src/mrd/cli.py) | The entry point CI calls |
-| [prompts/classifier/](prompts/classifier/) | `v001` ships; `v002` is deliberately degraded for the gate demo |
+| [prompts/classifier/](prompts/classifier/) | The shipping prompt lineage |
+| [prompts/demo/](prompts/demo/) | The deliberately degraded fixture, kept out of the lineage |
 | [config/pricing.yaml](config/pricing.yaml) | Token prices as reviewable config, not hardcoded constants |
 
 ## Golden dataset
@@ -231,8 +232,8 @@ with CI.
 Write the golden cases. `make dataset-report` shows progress against every target and names the
 three strata to write next. Everything downstream activates the moment `make dataset-lock` runs.
 
-Then the gate demo is two commands: `make eval` establishes a baseline on `v001`, and
-`make eval PROMPT=v002` runs the degraded variant, which should block. `v002` is written to be a
+Then the gate demo is two commands: `make eval` establishes a baseline on the shipping prompt, and
+`make eval-demo` runs the degraded fixture, which should block. `v002` is written to be a
 *realistic* bad commit — it keeps the task and the category definitions and only drops the tie-break
 rules and the few-shot anchor, so spot-checking a handful of easy emails shows nothing wrong. Only
 the ambiguous and adversarial cases depend on what it removed. That is the change this whole system
