@@ -198,24 +198,37 @@ def test_report_shows_calibration_when_present() -> None:
 
 
 def test_report_escapes_case_content() -> None:
-    """Case text is data; a golden case containing markup must not become markup."""
+    """Case text is data; a golden case containing markup must not become markup.
+
+    The flags are deliberately flaky. The report renders only cases needing
+    attention, so an all-passing case produces a page with no case detail - and
+    this assertion passes without testing anything. It did exactly that until a
+    browser test caught the escaping bug it was supposed to cover.
+    """
     hostile = make_case(0)
+    payload = {**hostile.model_dump(), "input_email": "<script>alert('x')</script>"}
     data = model.build(
-        make_outcome({"tc_0000": (True, True, True)}),
-        (
-            type(hostile)(
-                **{
-                    **hostile.model_dump(),
-                    "input_email": "<script>alert('x')</script>",
-                }
-            ),
-        ),
+        make_outcome({"tc_0000": (True, False, True)}),
+        (type(hostile)(**payload),),
         gate=GateReport(verdict=Verdict.PASS),
         generated_at=GENERATED,
     )
     page = html.render(data)
 
+    assert data.diffs, "fixture must render case detail or this test is vacuous"
     assert "<script>alert" not in page
+    assert "&lt;script&gt;" in page, "the text must still be shown, escaped"
+
+
+def test_autoescape_is_not_filename_dependent() -> None:
+    """select_autoescape(['html']) matches the final extension.
+
+    The template is report.html.j2, so that form left escaping off. Pinning the
+    behaviour here because the failure is silent and looks correct in review.
+    """
+    from mrd.report.html import _environment
+
+    assert _environment().autoescape is True
 
 
 def test_first_run_report_renders() -> None:

@@ -63,18 +63,31 @@ jobs:
       - run: uv python install 3.11
       - name: Install
         run: uv pip install --system -e '.[dev,e2e]'
-      - name: Install chromium
-        run: playwright install --with-deps chromium
-      - name: Render the report in a browser
+      - name: Install browsers
+        run: playwright install --with-deps chromium firefox webkit
+      - name: Render the report in every engine
         # The report is the primary human-facing artifact. String assertions
-        # prove the text is present; only a browser proves it is legible.
-        run: pytest -m e2e
-      - name: Upload screenshots
+        # prove the text is present; only a browser proves it is legible - and
+        # readers open CI artifacts in Safari as often as Chrome, so the CSS
+        # variables, prefers-color-scheme and grid stacking are checked in all
+        # three engines rather than only the one that happens to be installed.
+        run: |
+          pytest -m e2e \
+            --browser chromium --browser firefox --browser webkit \
+            --screenshot only-on-failure \
+            --video retain-on-failure \
+            --tracing retain-on-failure \
+            --output artifacts/e2e-failures \
+            --junit-xml=artifacts/e2e-junit.xml
+      - name: Upload screenshots and failure traces
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: report-screenshots-${{ github.run_id }}
-          path: artifacts/e2e/
+          path: |
+            artifacts/e2e/
+            artifacts/e2e-failures/
+            artifacts/e2e-junit.xml
           retention-days: 14
 
   dataset:

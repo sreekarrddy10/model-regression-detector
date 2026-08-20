@@ -109,6 +109,20 @@ pricing, prompts and both CLIs.
 - [ ] 3-min Loom: prompt edit → CI → Slack → diff report → merge blocked (needs real cases)
 - [x] **Proof:** image builds; eval runs inside the container against mounted data, exiting 0 clean and 1 on a seeded critical regression; Docker's own HEALTHCHECK reaches `healthy`
 
+## Report rendering (browser)
+
+- [x] 31 Playwright tests over the HTML report: self-containment, verdict styling, case detail,
+      SVG geometry, scorecard, WCAG AA contrast in both schemes, three viewports
+- [x] Hostile content: injected markup is escaped and shown, never executed; no off-disk fetch
+- [x] Pathological content: unbroken 600-char tokens, long URLs and 60-line threads do not
+      scroll the document sideways
+- [x] Cross-engine: chromium + firefox + webkit
+- [x] Stability: 10 consecutive full runs, 0 failures
+- [x] Failure artifacts verified — screenshot, trace and video are all captured
+- [x] **Found and fixed a live XSS-class bug**: autoescape was off because the template is
+      `report.html.j2` and `select_autoescape(["html"])` matches the final extension. The unit
+      test that was supposed to cover it passed vacuously, on a page rendering no case detail.
+
 ## Developer loop
 
 - [x] `.claude/settings.json` + `.claude/hooks/format-python.sh` — PostToolUse black · isort ·

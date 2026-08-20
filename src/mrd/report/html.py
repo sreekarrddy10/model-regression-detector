@@ -13,7 +13,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from pathlib import Path
 
-from jinja2 import Environment, FileSystemLoader, select_autoescape
+from jinja2 import Environment, FileSystemLoader
 
 from .model import ReportData
 
@@ -62,7 +62,18 @@ def sparkline(
 def _environment() -> Environment:
     env = Environment(
         loader=FileSystemLoader(TEMPLATE_DIR),
-        autoescape=select_autoescape(["html"]),
+        # Unconditionally on, NOT select_autoescape(["html"]).
+        #
+        # select_autoescape matches the FINAL extension, and this template is
+        # `report.html.j2` - extension `.j2`, so escaping was silently off and
+        # case content was injected raw. Golden cases carry real customer email
+        # (and `source: from_failure` cases come straight from production
+        # traffic), so that is a live path from untrusted text to script
+        # execution in whoever opens the CI artifact.
+        #
+        # Every template this loader serves is HTML. There is no reason to make
+        # escaping depend on a filename.
+        autoescape=True,
         trim_blocks=True,
         lstrip_blocks=True,
     )

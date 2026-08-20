@@ -1,4 +1,4 @@
-.PHONY: help venv install install-e2e seed test test-e2e lint fmt record eval clean demo-report docker-build \
+.PHONY: help venv install install-e2e seed test test-e2e test-e2e-all lint fmt record eval clean demo-report docker-build \
         dataset-validate dataset-report dataset-lock dataset-verify dataset-new
 .DEFAULT_GOAL := help
 
@@ -33,8 +33,20 @@ seed: ## Regenerate offline cassettes from deterministic stubs
 test: ## Offline tier: no network, no API keys
 	$(PYTEST) -m unit --cov=src/mrd --cov-report=term-missing
 
-test-e2e: ## Render the HTML report in a real browser (needs make install-e2e)
-	$(PYTEST) -m e2e
+E2E_ARTIFACTS := --screenshot only-on-failure --video retain-on-failure \
+                 --tracing retain-on-failure --output artifacts/e2e-failures
+
+test-e2e: ## Render the report in chromium (needs make install-e2e)
+	$(PYTEST) -m e2e $(E2E_ARTIFACTS)
+
+test-e2e-all: ## Same, across chromium + firefox + webkit
+	.venv/bin/playwright install firefox webkit
+	$(PYTEST) -m e2e --browser chromium --browser firefox --browser webkit $(E2E_ARTIFACTS)
+
+test-e2e-flaky: ## Repeat the suite 10x to surface instability
+	@fail=0; for i in $$(seq 1 10); do \
+		$(PYTEST) -m e2e -q >/dev/null 2>&1 && printf "." || { printf "F"; fail=$$((fail+1)); }; \
+	done; echo; echo "failures: $$fail/10"; [ $$fail -eq 0 ]
 
 test-integration: ## Live tier: requires API keys
 	$(PYTEST) -m integration

@@ -95,8 +95,8 @@
   <ul class="reasons">
     <li class="block"><strong>Blocking.</strong> 2 critical case(s) regressed: tc_0002, tc_0006</li>
     <li class="block"><strong>Blocking.</strong> 3 attempt(s) produced output that does not match the response schema</li>
-    <li class="block"><strong>Blocking.</strong> accuracy fell 33.3% (100.0% -> 66.7%), past the 8% block threshold</li>
-    <li>p95 latency rose 45% (100ms -> 145ms)</li>
+    <li class="block"><strong>Blocking.</strong> accuracy fell 33.3% (100.0% -&gt; 66.7%), past the 8% block threshold</li>
+    <li>p95 latency rose 45% (100ms -&gt; 145ms)</li>
     <li>cost per case rose 60%</li>
     <li>1 case(s) became non-deterministic across repeats: tc_0004</li>
     <li>7-run trend accuracy is 85.4%, below the 90% floor; gradual drift that no single run triggered</li>
@@ -183,7 +183,7 @@ not significant at α = 0.05.    A case counts as regressed only when it fails i
       <strong style="font-size:22px;font-family:var(--mono)">20</strong>
     </div>
   </div>
-  <p class="note">judge agrees with human scores (kappa=0.78 >= 0.60, rho=0.81, n=20)</p>
+  <p class="note">judge agrees with human scores (kappa=0.78 &gt;= 0.60, rho=0.81, n=20)</p>
 
   <h2>Accuracy trend</h2>
   <svg viewBox="0 0 320 60" width="320" height="60" role="img" aria-label="accuracy trend over recent runs"><line x1="6" y1="46.0" x2="314" y2="46.0" stroke="#d0d5dd" stroke-dasharray="4 3" stroke-width="1"/><polyline points="6.0,14.0 67.6,18.0 129.2,26.0 190.8,30.0 252.4,38.0 314.0,46.0" fill="none" stroke="#067647" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/><circle cx="314.0" cy="46.0" r="3.5" fill="#067647"/></svg>
@@ -279,7 +279,7 @@ not significant at α = 0.05.    A case counts as regressed only when it fails i
       <span class="pill">expected: account</span>
     </header>
     <div class="body">
-      <pre class="email">Great, another 'improvement' that logs me out every twenty minutes. Love it.</pre>
+      <pre class="email">Great, another &#39;improvement&#39; that logs me out every twenty minutes. Love it.</pre>
       <div class="cols">
         <div class="col">
           <h4>Baseline — pass</h4>

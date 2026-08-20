@@ -14,6 +14,7 @@ make test             # offline tier: 253 tests, no network, no API keys
 make lint             # ruff + black + isort + mypy --strict + bandit
 make dataset-report   # golden dataset coverage and remaining gaps
 make install-e2e      # Playwright + chromium, then: make test-e2e
+make test-e2e-all     # the report in chromium + firefox + webkit
 make demo-report      # regenerate docs/sample-report.html from a scripted regression
 make eval TIER=smoke  # run the gate on v001 (needs a locked dataset)
 make eval PROMPT=v002 # run the deliberately degraded variant — should BLOCK
@@ -173,8 +174,18 @@ Because the report is the primary human-facing artifact, it is tested in a real 
 the text exists; it proves nothing about whether the SVG trend line has non-zero height, whether the
 BLOCK banner actually renders red, whether dark mode clears WCAG AA contrast, or whether the
 side-by-side case columns stack on a phone. Those are the regressions a string check cannot see, so
-23 Playwright tests cover them and upload screenshots at three viewports and both colour schemes.
-Playwright is an optional extra — `pytest -m unit` runs unchanged without it.
+31 Playwright tests cover them, across chromium, firefox and webkit — readers open CI artifacts in
+Safari as often as Chrome, and the CSS variables, `prefers-color-scheme` and grid stacking are
+exactly the sort of thing that renders differently per engine. Screenshots upload at three viewports
+and both colour schemes; failures also upload a trace and a video. Playwright is an optional extra —
+`pytest -m unit` runs unchanged without it.
+
+Those tests earned their keep immediately by finding a live XSS-class bug: the template is named
+`report.html.j2`, and `select_autoescape(["html"])` matches the *final* extension, so escaping was
+silently off and case content was injected raw. Golden cases carry real customer email, and
+`source: from_failure` cases come straight from production traffic, so that was a genuine path from
+untrusted text to script execution in whoever opened the artifact. `autoescape` is now
+unconditional — there is no reason to make escaping depend on a filename.
 
 ## CI
 
