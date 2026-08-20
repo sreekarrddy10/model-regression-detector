@@ -43,7 +43,7 @@ path and one schema across vendors with the accounting intact.
 
 ### Authoring ⬜ (human, not automatable)
 
-- [ ] 80 hand-written cases, ≥12 per category — `make dataset-new ID=tc_00NN`
+- [ ] 80 hand-written cases, ≥12 per category — write in `data/golden/cases.yaml`, then `make dataset-build`
 - [ ] ≥12 `ambiguous`, ≥8 `adversarial`: two-category overlap, ultra-short, typo-heavy, mixed-language, sarcastic, empty body, buried request
 - [ ] ≥10 marked `critical: true`
 - [ ] 20 judge-holdout summaries scored 1–5 **with deliberate spread** — a flat holdout yields an undefined κ
@@ -131,6 +131,14 @@ pricing, prompts and both CLIs.
       enforcement points. Exits early for non-Python files, and survives malformed payloads.
 
 ## Authoring ergonomics (added while setting up Phase 2 work)
+
+- [x] **YAML authoring surface.** `cases.yaml` / `holdout.yaml` compile to the canonical JSONL
+      via `make dataset-build`. Hand-writing JSONL meant a five-line email became a
+      458-character single line with six escaped newlines — 80 times over. Block scalars keep
+      an email looking like an email; `id` and `added_at` are assigned.
+- [x] **Compilation is idempotent.** Timestamps are carried over from the existing JSONL by id,
+      so a no-op rebuild never churns the dataset hash and never invalidates the lock. Two
+      tests pin this, because it is the property the whole comparison model rests on.
 
 - [x] `dataset new` picks the next free `tc_NNNN` — no manual id bookkeeping across 80 cases
 - [x] Options may follow the subcommand (`mrd.dataset report --cases X`), the conventional order

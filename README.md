@@ -50,11 +50,14 @@ in the codebase generates cases; a model-generated golden set only measures whet
 with itself.
 
 ```bash
-make dataset-new ID=tc_0007   # append a blank row to fill in
-make dataset-validate         # every error at once, with line numbers
-make dataset-report           # coverage against each target
-make dataset-lock VERSION=v1  # freeze ground truth
+$EDITOR data/golden/cases.yaml   # write cases as YAML — real line breaks, no escaping
+make dataset-build               # compile to emails.jsonl, validate, report gaps
+make dataset-lock VERSION=v1     # freeze ground truth
 ```
+
+`cases.yaml` is the authoring surface; `emails.jsonl` is generated and is what the lock
+hashes. Rebuilding is idempotent — `added_at` is carried over by id, so a no-op rebuild
+never churns the hash and never invalidates the lock.
 
 Two guards worth knowing about:
 

@@ -1,0 +1,29 @@
+# Judge calibration holdout — authoring surface.
+#
+# Compile with:  make dataset-build
+#
+# Twenty summaries, each scored 1–5 by you. This is what decides whether the
+# LLM-as-judge may be trusted at all: below κ = 0.60 its scores are discarded
+# and the run reports nothing about summary quality.
+#
+# Score a DELIBERATE SPREAD. Agreement statistics need disagreement to measure,
+# so twenty summaries you would all score 5 yield an undefined κ and the judge
+# passes calibration without ever being tested. Include summaries that are
+# wrong, that hallucinate a detail, and that are accurate but useless.
+#
+# Fields:
+#   case_id      the case this summary is for — must exist in cases.yaml
+#   summary      the candidate summary being judged
+#   human_score  1–5, your judgement
+#   scorer       your name
+#   notes        optional — why this score
+#
+# Assigned for you: id (ho_NNNN), scored_at
+#
+#   - case_id: tc_0001
+#     summary: Customer wants a refund.
+#     human_score: 3
+#     scorer: sreekar
+#     notes: Accurate but drops the duplicate-charge detail a responder needs.
+
+samples: []

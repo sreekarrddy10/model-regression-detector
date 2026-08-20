@@ -1,4 +1,4 @@
-.PHONY: help venv install install-e2e seed test test-e2e test-e2e-all lint fmt record eval eval-demo clean demo-report docker-build \
+.PHONY: help venv install install-e2e seed test test-e2e test-e2e-all lint fmt record eval eval-demo clean demo-report docker-build dataset-build \
         dataset-validate dataset-report dataset-lock dataset-verify dataset-new
 .DEFAULT_GOAL := help
 
@@ -59,6 +59,9 @@ fmt: ## Apply formatting
 	.venv/bin/black src tests scripts
 	.venv/bin/isort src tests scripts
 	.venv/bin/ruff check --fix src tests scripts
+
+dataset-build: ## Compile cases.yaml -> emails.jsonl, then validate and report
+	$(PY) -m mrd.dataset build
 
 dataset-validate: ## Validate the golden dataset; every error with a line number
 	$(PY) -m mrd.dataset validate

@@ -16,13 +16,15 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from .. import paths
-from . import hashing, report
+from . import authoring, hashing, report
 from .loader import DatasetValidationError, load_cases, load_holdout
 
 DEFAULT_CASES = paths.resolve("data/golden/emails.jsonl")
 DEFAULT_HOLDOUT = paths.resolve("data/golden/judge_holdout.jsonl")
 DEFAULT_LOCK = paths.resolve("data/golden/dataset.lock.json")
 DEFAULT_PROMPTS = paths.resolve("prompts", env_var="MRD_PROMPTS_PATH")
+DEFAULT_CASES_YAML = paths.resolve("data/golden/cases.yaml")
+DEFAULT_HOLDOUT_YAML = paths.resolve("data/golden/holdout.yaml")
 
 
 def _out(text: str) -> None:
@@ -89,6 +91,26 @@ def next_case_id(path: Path) -> str:
     return f"tc_{index:04d}"
 
 
+def cmd_build(args: argparse.Namespace) -> int:
+    """Compile the authoring YAML into the canonical JSONL."""
+    now = datetime.now(UTC)
+    result = authoring.build_cases(args.cases_yaml, args.cases, now=now)
+    authoring.write_jsonl(result.cases, args.cases)
+    _out(f"{args.cases.name}: {result.summary}")
+
+    if args.holdout_yaml.exists():
+        samples = authoring.build_holdout(args.holdout_yaml, args.holdout, now=now)
+        authoring.write_jsonl(samples, args.holdout)
+        _out(f"{args.holdout.name}: {len(samples)} sample(s)")
+
+    # Re-read through the real loader, so `build` can never emit something
+    # `validate` would reject.
+    dataset, holdout = _load(args)
+    _out(f"validated: {len(dataset)} case(s), {len(holdout)} holdout sample(s)")
+    _out(report.render(report.build(dataset, holdout)))
+    return 0
+
+
 def cmd_new(args: argparse.Namespace) -> int:
     """Emit a blank case row for a human to fill in."""
     template = {
@@ -114,6 +136,8 @@ def build_parser() -> argparse.ArgumentParser:
     paths.add_argument("--holdout", type=Path, default=DEFAULT_HOLDOUT)
     paths.add_argument("--lock", type=Path, default=DEFAULT_LOCK)
     paths.add_argument("--prompts", type=Path, default=DEFAULT_PROMPTS)
+    paths.add_argument("--cases-yaml", type=Path, default=DEFAULT_CASES_YAML)
+    paths.add_argument("--holdout-yaml", type=Path, default=DEFAULT_HOLDOUT_YAML)
 
     parser = argparse.ArgumentParser(prog="mrd.dataset", description=__doc__, parents=[paths])
     sub = parser.add_subparsers(dest="command", required=True)
@@ -123,6 +147,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     lock = sub.add_parser("lock", help="write the lock file", parents=[paths])
     lock.add_argument("--version", default="v1")
+
+    sub.add_parser("build", help="compile cases.yaml -> emails.jsonl (idempotent)", parents=[paths])
 
     new = sub.add_parser("new", help="print a blank case row", parents=[paths])
     new.add_argument("--id", default=None, help="default: the next unused tc_NNNN")
@@ -135,6 +161,7 @@ _COMMANDS = {
     "report": cmd_report,
     "lock": cmd_lock,
     "verify": cmd_verify,
+    "build": cmd_build,
     "new": cmd_new,
 }
 

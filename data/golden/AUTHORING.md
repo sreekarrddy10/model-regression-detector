@@ -6,13 +6,38 @@ set measures whether the model agrees with itself.
 
 ## Workflow
 
+Write cases in `cases.yaml`, then compile:
+
 ```bash
-python -m mrd.dataset new --id tc_0007 >> data/golden/emails.jsonl   # blank row
-$EDITOR data/golden/emails.jsonl                                     # fill it in
-make dataset-validate                                                # errors, with line numbers
-make dataset-report                                                  # coverage gaps
-make dataset-lock VERSION=v1                                         # freeze it
+$EDITOR data/golden/cases.yaml    # write cases as YAML — real line breaks, no escaping
+make dataset-build                # compile to emails.jsonl, validate, and report gaps
+make dataset-lock VERSION=v1      # freeze ground truth when the report says READY
 ```
+
+`emails.jsonl` is generated and is the canonical, hashed artifact — the lock covers it and
+runs are compared against it. You edit the YAML; both files are committed.
+
+**Why not author the JSONL directly?** A five-line customer email becomes a 458-character
+single line with six escaped `\n` sequences, and every escape is a chance to introduce a
+typo the validator catches only after you have written twenty more cases. Block scalars
+keep the email looking like an email:
+
+```yaml
+cases:
+  - input_email: |
+      Hi — we were charged twice for September (INV-4471 and INV-4472).
+
+      Can you refund the duplicate?
+    expected_category: billing
+    expected_summary: Customer was charged twice in September and wants the duplicate refunded.
+    difficulty: easy
+    critical: true
+    notes: Core billing path. If duplicate-charge refunds misroute, money is at stake.
+```
+
+`id` and `added_at` are assigned for you. Rebuilding is idempotent — timestamps are carried
+over from the existing JSONL, so a no-op `make dataset-build` never churns the dataset hash
+and never invalidates the lock.
 
 ## Fields
 

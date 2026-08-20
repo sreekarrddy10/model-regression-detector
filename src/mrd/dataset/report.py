@@ -190,6 +190,6 @@ def render(report: Report) -> str:
     if report.write_next:
         lines += ["", "Write next:"]
         lines += [f"  - {category} / {difficulty}" for category, difficulty in report.write_next]
-        lines.append("  (make dataset-new  appends a blank row with the next free id)")
+        lines.append("  (write them in data/golden/cases.yaml, then: make dataset-build)")
 
     return "\n".join(lines) + "\n"

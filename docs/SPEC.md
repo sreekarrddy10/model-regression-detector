@@ -191,7 +191,9 @@ model-regression-detector/
 ├── .github/workflows/eval.yml
 ├── prompts/classifier/v001.yaml … v00N.yaml
 ├── data/golden/
-│   ├── emails.jsonl
+│   ├── cases.yaml                 # authoring surface (what you edit)
+│   ├── holdout.yaml               # authoring surface for the judge holdout
+│   ├── emails.jsonl               # generated, canonical, hashed
 │   ├── dataset.lock.json          # {version, sha256, count, by_difficulty}
 │   └── judge_holdout.jsonl        # 20 human-scored summaries for calibration
 ├── src/mrd/
@@ -316,6 +318,24 @@ framework and reconcile two accounting paths.
 **Headline for the portfolio:** *"CI/CD for model behavior — a merge gate that blocks prompt changes on statistically significant quality regressions, with a calibrated judge and slow-drift detection, for under $0.05 per pull request."*
 
 ---
+
+## 7b. Deliberate cuts
+
+Two items from the original layout in §4 were dropped on purpose.
+
+**`dashboard/app.py` (Streamlit).** The HTML report already carries the scorecard, the
+per-case diff and the trend chart, and the Slack alert renders from the same `ReportData`
+structure. A third rendering path would be a third thing to keep in sync — exactly the
+failure D5 and the shared-`ReportData` design exist to avoid. The trend view that
+justified it is now a panel in the report.
+
+**`.claude/evals/`.** This would have been a second bookkeeping layer over a repo that
+already has 288 tests plus a per-phase proof artifact in `tasks/todo.md` written as
+pass/fail criteria. The `eval-harness` skill's substance — pass@k / pass^k, the grader
+taxonomy, the anti-pattern list — is implemented in `stats.py` and `compare.py` rather
+than transcribed into a parallel checklist.
+
+Both are recoverable if the need appears. Neither is blocking anything.
 
 ## 8. Risks
 
