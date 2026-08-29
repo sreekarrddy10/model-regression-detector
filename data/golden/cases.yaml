@@ -41,4 +41,5 @@
 #
 # `make dataset-report` names the three scarcest strata each time you rebuild.
 
-cases: []
+# Entries append below this line - `make dataset-new` writes a blank one.
+cases:

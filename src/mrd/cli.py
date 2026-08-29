@@ -62,7 +62,7 @@ async def _execute(args: argparse.Namespace) -> int:
     if not dataset.cases:
         _err(
             "error: the golden dataset is empty. Author cases first:\n"
-            "  make dataset-new ID=tc_0001   then   make dataset-report"
+            "  edit data/golden/cases.yaml   then   make dataset-build"
         )
         return 1
 

@@ -6,7 +6,6 @@ PY      := .venv/bin/python
 PYTEST  := .venv/bin/pytest
 TIER    ?= smoke
 VERSION ?= v1
-ID      ?= tc_0001
 
 help:
 	@grep -E '^[a-z-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -75,9 +74,9 @@ dataset-lock: ## Freeze ground truth: make dataset-lock VERSION=v1
 dataset-verify: ## Fail if the dataset drifted from its lock
 	$(PY) -m mrd.dataset verify
 
-dataset-new: ## Append a blank case row: make dataset-new ID=tc_0007
-	$(PY) -m mrd.dataset new --id $(ID) >> data/golden/emails.jsonl
-	@echo "Appended blank $(ID) to data/golden/emails.jsonl - now fill it in."
+dataset-new: ## Append a blank case stanza to data/golden/cases.yaml
+	$(PY) -m mrd.dataset new >> data/golden/cases.yaml
+	@echo "Appended a blank case to data/golden/cases.yaml - fill it in, then: make dataset-build"
 
 demo-report: ## Regenerate docs/sample-report.html from a scripted regression
 	$(PY) scripts/demo_report.py || true

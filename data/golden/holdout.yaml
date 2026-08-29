@@ -26,4 +26,5 @@
 #     scorer: sreekar
 #     notes: Accurate but drops the duplicate-charge detail a responder needs.
 
-samples: []
+# Entries append below this line - `make dataset-new` writes a blank one.
+samples:

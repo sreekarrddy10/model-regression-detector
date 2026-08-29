@@ -10,7 +10,6 @@ python -m mrd.dataset new --id tc_0007
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -71,26 +70,6 @@ def cmd_verify(args: argparse.Namespace) -> int:
     return 0
 
 
-def next_case_id(path: Path) -> str:
-    """The lowest unused tc_NNNN id.
-
-    Authoring eighty cases should not also mean tracking eighty ids by hand,
-    and a mistyped id is a duplicate the loader will reject on the next run.
-    """
-    used = set()
-    if path.exists():
-        for raw in path.read_text(encoding="utf-8").splitlines():
-            if raw.strip():
-                try:
-                    used.add(json.loads(raw).get("id"))
-                except json.JSONDecodeError:
-                    continue
-    index = 1
-    while f"tc_{index:04d}" in used:
-        index += 1
-    return f"tc_{index:04d}"
-
-
 def cmd_build(args: argparse.Namespace) -> int:
     """Compile the authoring YAML into the canonical JSONL."""
     now = datetime.now(UTC)
@@ -112,19 +91,29 @@ def cmd_build(args: argparse.Namespace) -> int:
 
 
 def cmd_new(args: argparse.Namespace) -> int:
-    """Emit a blank case row for a human to fill in."""
-    template = {
-        "id": args.id or next_case_id(args.cases),
-        "input_email": "",
-        "expected_category": "billing",
-        "expected_summary": "",
-        "difficulty": "easy",
-        "critical": False,
-        "source": "handwritten",
-        "notes": "",
-        "added_at": datetime.now(UTC).isoformat(),
-    }
-    _out(json.dumps(template, ensure_ascii=False))
+    """Print a blank case stanza for cases.yaml.
+
+    YAML, not a JSONL row. Appending a row to emails.jsonl used to be the
+    workflow; it is now the *generated* artifact, so anything written there is
+    silently erased by the next `build`. Emitting the authoring format makes
+    that mistake impossible to reach.
+
+    Fields are left empty on purpose - `build` names each missing one.
+    """
+    lines = [
+        "",
+        "  # Written " + datetime.now(UTC).date().isoformat(),
+        "  - input_email: |",
+        "      ",
+        '    expected_category: ""   # billing | technical | account | general',
+        '    expected_summary: ""',
+        '    difficulty: ""          # easy | ambiguous | adversarial',
+        "    critical: false",
+        '    notes: ""               # why this case exists',
+    ]
+    if args.id:
+        lines.insert(2, f"    id: {args.id}")
+    _out("\n".join(lines))
     return 0
 
 
@@ -151,7 +140,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("build", help="compile cases.yaml -> emails.jsonl (idempotent)", parents=[paths])
 
     new = sub.add_parser("new", help="print a blank case row", parents=[paths])
-    new.add_argument("--id", default=None, help="default: the next unused tc_NNNN")
+    new.add_argument("--id", default=None, help="pin an id; otherwise build assigns one")
 
     return parser
 

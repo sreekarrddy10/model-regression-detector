@@ -187,7 +187,12 @@ def test_empty_dataset_says_what_to_do(
     (tmp_path / "emails.jsonl").write_text("", encoding="utf-8")
 
     assert main(workspace) == 1
-    assert "make dataset-new" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    # Steer to the YAML authoring surface, not the generated JSONL: a row
+    # appended straight to emails.jsonl is dropped by the next build.
+    assert "data/golden/cases.yaml" in err
+    assert "make dataset-build" in err
+    assert "dataset-new" not in err
 
 
 def test_missing_lock_is_a_clear_error(

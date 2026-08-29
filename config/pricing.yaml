@@ -1,9 +1,19 @@
 # Token pricing, USD per 1,000,000 tokens.
 #
 # VERIFY THESE against the provider pricing pages before trusting any cost number
-# in a report. They are seeded, not authoritative, and they change without notice:
-#   https://openai.com/api/pricing/
-#   https://www.anthropic.com/pricing
+# in a report. They change without notice:
+#   https://developers.openai.com/api/docs/pricing
+#   https://platform.claude.com/docs/en/about-claude/pricing
+#
+# Last verified 2026-08-20 against both pages above. Three rows confirmed as
+# seeded; claude-sonnet-5 was corrected from 3.00/15.00 to 2.00/10.00 - the
+# increase scheduled for 2026-09-01 was cancelled and 2/10 is now standard.
+#
+# Caveat for cross-model cost comparison: Claude 4.7+ and the Claude 5 family use
+# a newer tokenizer that emits ~30% more tokens for the same text than Sonnet 4.6
+# and earlier. A cost delta between those generations is partly tokenizer, not
+# model. Compare cost within a tokenizer generation, or the gate reads a
+# tokenizer change as a cost regression.
 #
 # A model absent from this file is not an error - its cost is recorded as
 # unavailable and the cost dimension of the gate is skipped for that run.
@@ -16,8 +26,8 @@ models:
     input_per_mtok: 0.15
     output_per_mtok: 0.60
   claude-sonnet-5:
-    input_per_mtok: 3.00
-    output_per_mtok: 15.00
+    input_per_mtok: 2.00
+    output_per_mtok: 10.00
   claude-haiku-4-5-20251001:
     input_per_mtok: 1.00
     output_per_mtok: 5.00
