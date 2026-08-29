@@ -28,3 +28,16 @@ prevents it recurring.
   stdin cannot also take its program from stdin; use `-c`. The failure is silent.
 - **Run a new suite ten times before trusting it.** Cheap, and it converts "it passed" into
   "it is stable".
+
+## From reviewing an authored dataset
+
+- **Exact-match leakage checks are not enough.** A case reworded from a few-shot example
+  is still an answer the model was shown. Measure overlap, not equality - and say so
+  loudly when the leaked case is tagged critical, because a sentinel that cannot fail
+  protects nothing.
+- **Do not collapse orthogonal axes into one enum.** Difficulty and *kind* of difficulty
+  are independent; forcing them into one field loses information the author recorded.
+- **A converter must not touch labels.** Renaming fields is mechanical; rewriting an
+  `expected_category` is editing ground truth, which no script may do.
+- **yaml.safe_dump destroys block scalars.** It quotes multi-line strings and folds the
+  breaks, which round-trips correctly and reads terribly. Register a representer.

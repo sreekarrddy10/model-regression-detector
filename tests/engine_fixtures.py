@@ -21,14 +21,23 @@ NOW = datetime(2026, 8, 16, tzinfo=UTC)
 CATEGORIES = ("billing", "technical", "account", "general")
 
 
-def make_case(index: int, *, critical: bool = False, difficulty: str = "easy") -> GoldenCase:
+def make_case(
+    index: int,
+    *,
+    critical: bool = False,
+    difficulty: str = "easy",
+    strata: tuple[str, ...] = (),
+) -> GoldenCase:
+    tags = list(strata)
+    if critical and "critical" not in tags:
+        tags.append("critical")
     return GoldenCase(
         id=f"tc_{index:04d}",
         input_email=f"Synthetic email body {index}.",
         expected_category=CATEGORIES[index % 4],
         expected_summary=f"Reference summary {index}.",
         difficulty=difficulty,  # type: ignore[arg-type]
-        critical=critical,
+        strata=tuple(tags),  # type: ignore[arg-type]
         source="handwritten",
         notes=f"Engine fixture {index}.",
         added_at=NOW,

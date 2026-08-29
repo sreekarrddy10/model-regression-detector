@@ -31,7 +31,7 @@ cases:
     expected_category: billing
     expected_summary: Customer was charged twice in September and wants the duplicate refunded.
     difficulty: easy
-    critical: true
+    strata: [critical]
     notes: Core billing path. If duplicate-charge refunds misroute, money is at stake.
 ```
 
@@ -47,8 +47,8 @@ and never invalidates the lock.
 | `input_email` | The raw email. Write it as a real person would, typos included. |
 | `expected_category` | `billing` · `technical` · `account` · `general` |
 | `expected_summary` | One sentence, customer's point of view, under 25 words. |
-| `difficulty` | `easy` · `ambiguous` · `adversarial` |
-| `critical` | `true` = a regression here blocks the merge on its own. Reserve for behavior that must never break. |
+| `difficulty` | `easy` · `medium` · `hard` — how demanding the case is |
+| `strata` | overlapping tags: `ambiguous` · `adversarial` · `critical`. A case can carry all three. |
 | `source` | `handwritten` now; `from_failure` for cases harvested from production failures later. |
 | `notes` | Required. Why this case exists. Write it for whoever debugs the failure in six months. |
 | `added_at` | ISO 8601 UTC. |
@@ -59,9 +59,9 @@ and never invalidates the lock.
 |---|---|
 | Total cases | 80 |
 | Per category | ≥ 12 |
-| Ambiguous | ≥ 12 |
-| Adversarial | ≥ 8 |
-| Critical | ≥ 10 |
+| `ambiguous` | ≥ 12 |
+| `adversarial` | ≥ 8 |
+| `critical` | ≥ 10 |
 | Judge holdout | 20 |
 
 `make dataset-report` shows progress against each.
@@ -82,8 +82,12 @@ rules in `prompts/classifier/v001.yaml` decide the answer, say which rule and wh
 
 ## Two rules the validator enforces
 
-**No leakage.** A case may not duplicate a few-shot example from any prompt version. The model
-was shown those answers, so such a case measures recall of the prompt, not capability.
+**No leakage.** A case may not duplicate — or closely paraphrase — a few-shot example from any
+prompt version. The model was shown those answers, so such a case measures recall of the prompt,
+not capability. Exact matches are rejected, and so is anything above 45% token overlap: a case
+reworded from an example is still an answer the model has seen. When such a case is tagged
+`critical`, it becomes a merge-blocking sentinel that structurally cannot fail, so the error says
+so explicitly.
 
 **No duplicate emails.** Near-identical inputs inflate the apparent sample size and skew the
 significance test in Phase 3.

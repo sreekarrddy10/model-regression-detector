@@ -14,13 +14,11 @@ from dataclasses import dataclass, field
 
 from ..feature.schema import CATEGORIES
 from .loader import Dataset
-from .schema import DIFFICULTIES, HoldoutSample
+from .schema import DIFFICULTIES, STRATA, HoldoutSample
 
 TARGET_CASES = 80
 MIN_PER_CATEGORY = 12
-MIN_ADVERSARIAL = 8
-MIN_AMBIGUOUS = 12
-MIN_CRITICAL = 10
+MIN_STRATUM = {"ambiguous": 12, "adversarial": 8, "critical": 10}
 TARGET_HOLDOUT = 20
 MIN_HOLDOUT_DISTINCT_SCORES = 3
 
@@ -30,6 +28,7 @@ class Report:
     count: int
     by_category: dict[str, int]
     by_difficulty: dict[str, int]
+    by_stratum: dict[str, int]
     by_source: dict[str, int]
     critical_count: int
     holdout_count: int
@@ -53,20 +52,18 @@ def _dataset_warnings(dataset: Dataset) -> list[str]:
         if found < MIN_PER_CATEGORY:
             warnings.append(f"category {category!r}: {found}/{MIN_PER_CATEGORY}")
 
-    ambiguous = len(dataset.by_difficulty("ambiguous"))
-    if ambiguous < MIN_AMBIGUOUS:
-        warnings.append(
-            f"only {ambiguous}/{MIN_AMBIGUOUS} ambiguous cases; "
-            "an all-easy set cannot detect a real regression"
-        )
+    for stratum, floor in MIN_STRATUM.items():
+        found = len(dataset.by_stratum(stratum))
+        if found < floor:
+            note = (
+                "; a set with no hard cases cannot detect a real regression"
+                if stratum == "ambiguous"
+                else ""
+            )
+            warnings.append(f"only {found}/{floor} {stratum} cases{note}")
 
-    adversarial = len(dataset.by_difficulty("adversarial"))
-    if adversarial < MIN_ADVERSARIAL:
-        warnings.append(f"only {adversarial}/{MIN_ADVERSARIAL} adversarial cases")
-
-    critical = len(dataset.critical)
-    if critical < MIN_CRITICAL:
-        warnings.append(f"only {critical}/{MIN_CRITICAL} cases marked critical")
+    if not dataset.by_difficulty("hard"):
+        warnings.append("no cases tagged hard; difficulty is not being exercised")
 
     return warnings
 
@@ -100,16 +97,13 @@ def _holdout_warnings(samples: Sequence[HoldoutSample]) -> list[str]:
     return warnings
 
 
-# Hardest first. Ambiguous and adversarial cases are both scarcer and far more
-# informative than easy ones: an all-easy set produces a confident pass rate that
-# cannot detect a real regression. Suggest them while motivation is high.
-_DIFFICULTY_PRIORITY = {"adversarial": 0, "ambiguous": 1, "easy": 2}
+# Hardest first. Hard cases are scarcer and far more informative than easy ones:
+# an all-easy set produces a confident pass rate that cannot detect a real
+# regression. Suggest them while motivation is high.
+_DIFFICULTY_PRIORITY = {"hard": 0, "medium": 1, "easy": 2}
 
-_DIFFICULTY_TARGETS = {
-    "easy": TARGET_CASES - MIN_AMBIGUOUS - MIN_ADVERSARIAL,
-    "ambiguous": MIN_AMBIGUOUS,
-    "adversarial": MIN_ADVERSARIAL,
-}
+# Even thirds across difficulty; strata have their own explicit floors.
+_DIFFICULTY_TARGETS = {d: TARGET_CASES // len(DIFFICULTIES) for d in DIFFICULTIES}
 
 
 def _write_next(
@@ -152,6 +146,7 @@ def build(dataset: Dataset, holdout: Sequence[HoldoutSample] = ()) -> Report:
         count=len(dataset),
         by_category=by_category,
         by_difficulty=by_difficulty,
+        by_stratum={s: len(dataset.by_stratum(s)) for s in STRATA},
         by_source={
             s: sum(1 for c in dataset if c.source == s) for s in ("handwritten", "from_failure")
         },
@@ -177,6 +172,8 @@ def render(report: Report) -> str:
     lines += [f"    {name:<12} {count:>3}" for name, count in report.by_category.items()]
     lines += ["", "  by difficulty"]
     lines += [f"    {name:<12} {count:>3}" for name, count in report.by_difficulty.items()]
+    lines += ["", "  by stratum (overlapping tags, not a partition)"]
+    lines += [f"    {name:<12} {count:>3}" for name, count in report.by_stratum.items()]
     lines += ["", "  by source"]
     lines += [f"    {name:<12} {count:>3}" for name, count in report.by_source.items()]
 

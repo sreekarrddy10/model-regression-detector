@@ -10,12 +10,13 @@
 #                      multi-line — no escaping, real line breaks.
 #   expected_category  billing | technical | account | general
 #   expected_summary   one sentence, customer's point of view, under 25 words
-#   difficulty         easy | ambiguous | adversarial
+#   difficulty         easy | medium | hard  — how demanding the case is
 #   notes              why this case exists. Required. Write it for whoever
 #                      debugs the failure in six months.
-#   critical           optional, default false. true = a regression here blocks
-#                      the merge on its own. Reserve it for behaviour that must
-#                      never break.
+#   strata             optional overlapping tags: ambiguous, adversarial,
+#                      critical. A case can carry all three. `critical` means a
+#                      regression here blocks the merge on its own - reserve it
+#                      for behaviour that must never break.
 #
 # Assigned for you:
 #   id                 the next free tc_NNNN, unless you set one explicitly
@@ -33,7 +34,7 @@
 #     expected_category: billing
 #     expected_summary: Customer was charged twice in September and wants the duplicate refunded.
 #     difficulty: easy
-#     critical: true
+#     strata: [critical]
 #     notes: Core billing path. If duplicate-charge refunds misroute, money is at stake.
 #
 # Do NOT generate these with an LLM. A model-generated golden set measures

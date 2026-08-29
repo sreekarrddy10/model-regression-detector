@@ -12,8 +12,11 @@
 # wrong, that hallucinate a detail, and that are accurate but useless.
 #
 # Fields:
-#   case_id      the case this summary is for — must exist in cases.yaml
-#   summary      the candidate summary being judged
+#   case_id      the case this summary is for — must exist in cases.yaml.
+#                Optional: instead of a case_id you may give `email` and
+#                `reference_summary` inline, which lets the judge be calibrated
+#                on text that is deliberately NOT in the golden set.
+#   candidate_summary  the summary being judged
 #   human_score  1–5, your judgement
 #   scorer       your name
 #   notes        optional — why this score
@@ -21,7 +24,7 @@
 # Assigned for you: id (ho_NNNN), scored_at
 #
 #   - case_id: tc_0001
-#     summary: Customer wants a refund.
+#     candidate_summary: Customer wants a refund.
 #     human_score: 3
 #     scorer: sreekar
 #     notes: Accurate but drops the duplicate-charge detail a responder needs.

@@ -33,7 +33,7 @@ def _case(**overrides: object) -> GoldenCase:
         "expected_category": "billing",
         "expected_summary": "Ordinary summary.",
         "difficulty": "easy",
-        "critical": False,
+        "strata": [],
         "source": "handwritten",
         "notes": "Ordinary note.",
         "added_at": STAMP,

@@ -13,6 +13,7 @@ correlates with nothing a person would recognise as quality.
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
 
@@ -20,6 +21,8 @@ from ..dataset.schema import HoldoutSample
 from ..providers.base import Provider
 from ..stats import quadratic_weighted_kappa, spearman
 from .judge import score_summary
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_KAPPA_FLOOR = 0.60
 
@@ -76,12 +79,25 @@ async def calibrate(
     """
     semaphore = asyncio.Semaphore(concurrency)
 
+    def resolve(sample: HoldoutSample) -> tuple[str, str] | None:
+        """Source text and reference, from the sample itself or its linked case."""
+        if sample.email and sample.reference_summary:
+            return sample.email, sample.reference_summary
+        if sample.case_id and sample.case_id in emails:
+            return emails[sample.case_id], references[sample.case_id]
+        return None
+
     async def score(sample: HoldoutSample) -> tuple[int, int] | None:
+        resolved = resolve(sample)
+        if resolved is None:
+            logger.warning("holdout %s cannot be resolved to an email; skipping", sample.id)
+            return None
+        email, reference = resolved
         async with semaphore:
             result = await score_summary(
-                emails[sample.case_id],
-                references[sample.case_id],
-                sample.summary,
+                email,
+                reference,
+                sample.candidate_summary,
                 provider,
                 model=model,
             )

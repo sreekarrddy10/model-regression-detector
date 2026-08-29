@@ -96,13 +96,26 @@ def test_explicit_ids_are_honoured_and_not_reused(tmp_path: Path) -> None:
 def test_defaults_are_applied(tmp_path: Path) -> None:
     case = build(tmp_path, [dict(CASE)]).cases[0]
     assert case.critical is False
+    assert case.strata == ()
     assert case.source == "handwritten"
 
 
 def test_critical_and_source_can_be_set(tmp_path: Path) -> None:
-    case = build(tmp_path, [{**CASE, "critical": True, "source": "from_failure"}]).cases[0]
+    case = build(tmp_path, [{**CASE, "strata": ["critical"], "source": "from_failure"}]).cases[0]
     assert case.critical is True
+    assert case.strata == ("critical",)
     assert case.source == "from_failure"
+
+
+def test_a_bare_critical_bool_is_rejected(tmp_path: Path) -> None:
+    """`critical` is a stratum tag now; the old bool would silently do nothing."""
+    with pytest.raises(DatasetValidationError, match="critical"):
+        build(tmp_path, [{**CASE, "critical": True}])
+
+
+def test_duplicate_strata_are_rejected(tmp_path: Path) -> None:
+    with pytest.raises(DatasetValidationError, match="duplicate strata"):
+        build(tmp_path, [{**CASE, "strata": ["critical", "critical"]}])
 
 
 # --------------------------------------------------------------------------- #
@@ -215,8 +228,8 @@ def test_holdout_ids_and_timestamps_are_assigned(tmp_path: Path) -> None:
     source = write_yaml(
         tmp_path / "holdout.yaml",
         [
-            {"case_id": "tc_0001", "summary": "a", "human_score": 5, "scorer": "me"},
-            {"case_id": "tc_0001", "summary": "b", "human_score": 2, "scorer": "me"},
+            {"case_id": "tc_0001", "candidate_summary": "a", "human_score": 5, "scorer": "me"},
+            {"case_id": "tc_0001", "candidate_summary": "b", "human_score": 2, "scorer": "me"},
         ],
         key="samples",
     )
@@ -229,7 +242,7 @@ def test_holdout_ids_and_timestamps_are_assigned(tmp_path: Path) -> None:
 def test_holdout_rebuild_is_idempotent(tmp_path: Path) -> None:
     source = write_yaml(
         tmp_path / "holdout.yaml",
-        [{"case_id": "tc_0001", "summary": "a", "human_score": 4, "scorer": "me"}],
+        [{"case_id": "tc_0001", "candidate_summary": "a", "human_score": 4, "scorer": "me"}],
         key="samples",
     )
     jsonl = tmp_path / "h.jsonl"
@@ -243,7 +256,7 @@ def test_holdout_rebuild_is_idempotent(tmp_path: Path) -> None:
 def test_out_of_range_holdout_score_is_reported(tmp_path: Path) -> None:
     source = write_yaml(
         tmp_path / "holdout.yaml",
-        [{"case_id": "tc_0001", "summary": "a", "human_score": 9, "scorer": "me"}],
+        [{"case_id": "tc_0001", "candidate_summary": "a", "human_score": 9, "scorer": "me"}],
         key="samples",
     )
     with pytest.raises(DatasetValidationError, match="human_score"):

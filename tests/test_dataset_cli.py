@@ -150,4 +150,4 @@ def test_report_suggests_the_scarcest_strata_first(
     suggestions = [line for line in after if line.startswith("  - ")]
 
     assert suggestions, "the report should say which stratum to write next"
-    assert "adversarial" in suggestions[0], "the scarcest, most informative stratum leads"
+    assert "hard" in suggestions[0], "the scarcest, most informative difficulty leads"

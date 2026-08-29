@@ -32,7 +32,7 @@ from .loader import DatasetError, DatasetValidationError
 from .schema import CASE_ID_RE, GoldenCase, HoldoutSample
 
 AUTO_FIELDS = ("id", "added_at")
-DEFAULTS: dict[str, Any] = {"critical": False, "source": "handwritten"}
+DEFAULTS: dict[str, Any] = {"strata": (), "source": "handwritten"}
 REQUIRED = ("input_email", "expected_category", "expected_summary", "difficulty", "notes")
 
 

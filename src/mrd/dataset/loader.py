@@ -8,6 +8,7 @@ hundred sequential runs.
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -16,6 +17,9 @@ from pydantic import ValidationError
 
 from ..prompts import PromptConfig
 from .schema import GoldenCase, HoldoutSample
+
+NEAR_DUPLICATE_THRESHOLD = 0.45
+MIN_TOKENS_FOR_OVERLAP = 8
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,6 +60,9 @@ class Dataset:
     def by_difficulty(self, difficulty: str) -> tuple[GoldenCase, ...]:
         return tuple(c for c in self.cases if c.difficulty == difficulty)
 
+    def by_stratum(self, stratum: str) -> tuple[GoldenCase, ...]:
+        return tuple(c for c in self.cases if stratum in c.strata)
+
 
 def _iter_rows(path: Path) -> Iterator[tuple[int, str]]:
     if not path.exists():
@@ -70,6 +77,28 @@ def _normalize(text: str) -> str:
     return " ".join(text.split()).casefold()
 
 
+def _tokens(text: str) -> set[str]:
+    return set(re.findall(r"[a-z0-9]+", _normalize(text)))
+
+
+def overlap(left: str, right: str) -> float:
+    """Jaccard token overlap, used to catch *near*-duplicate leakage.
+
+    Exact matching is not enough. A case reworded from a few-shot example - same
+    scenario, different phrasing - is still an answer the model was shown, and
+    it will essentially always pass. When such a case is tagged critical, the
+    result is a merge-blocking sentinel that structurally cannot fail.
+
+    Real example this exists for: a golden case reading "I lost my phone with my
+    authenticator app and now I can't get past the 2FA screen" against a
+    few-shot example reading "I lost my phone and my authenticator app with it,
+    so I can't get past the 2FA prompt" - 0.57 overlap, zero exact matches.
+    """
+    left_tokens, right_tokens = _tokens(left), _tokens(right)
+    union = left_tokens | right_tokens
+    return len(left_tokens & right_tokens) / len(union) if union else 0.0
+
+
 def few_shot_emails(prompts_root: Path) -> dict[str, str]:
     """Every few-shot email across every prompt version, mapped to its version."""
     found: dict[str, str] = {}
@@ -77,6 +106,15 @@ def few_shot_emails(prompts_root: Path) -> dict[str, str]:
         config = PromptConfig.from_file(path)
         for example in config.few_shot:
             found.setdefault(_normalize(example.email), config.version_id)
+    return found
+
+
+def leaked_texts(prompts_root: Path) -> list[tuple[str, str]]:
+    """Every few-shot email with the prompt version it came from."""
+    found: list[tuple[str, str]] = []
+    for path in sorted(prompts_root.rglob("v*.yaml")):
+        config = PromptConfig.from_file(path)
+        found.extend((example.email, config.version_id) for example in config.few_shot)
     return found
 
 
@@ -135,6 +173,32 @@ def load_cases(path: Path, *, prompts_root: Path | None = None) -> Dataset:
                         "a case the model was shown measures recall, not capability",
                     )
                 )
+                continue
+
+            # Near-duplicates are the same failure wearing different words. The
+            # minimum-length guard keeps very short inputs (a one-word "broken")
+            # from tripping on incidental token overlap.
+            if len(_tokens(case.input_email)) < MIN_TOKENS_FOR_OVERLAP:
+                continue
+            for example, example_version in leaked_texts(prompts_root):
+                score = overlap(case.input_email, example)
+                if score >= NEAR_DUPLICATE_THRESHOLD:
+                    errors.append(
+                        DatasetError(
+                            seen_ids[case.id],
+                            f"{case.id} is {score:.0%} token-overlapping with a few-shot "
+                            f"example in prompt {example_version}. Reword the case so it "
+                            f"tests something the model was not shown, or drop that "
+                            f"example from the prompt"
+                            + (
+                                " - this one is tagged critical, so as written it is a "
+                                "merge-blocking sentinel that cannot fail"
+                                if case.critical
+                                else ""
+                            ),
+                        )
+                    )
+                    break
 
     if errors:
         raise DatasetValidationError(path, errors)
@@ -171,7 +235,10 @@ def load_holdout(path: Path, *, dataset: Dataset | None = None) -> tuple[Holdout
             continue
         seen_ids[sample.id] = lineno
 
-        if known is not None and sample.case_id not in known:
+        # case_id is optional: a self-contained sample carries its own email and
+        # reference. When one *is* given it must resolve, or calibration would
+        # score against a case that does not exist.
+        if known is not None and sample.case_id is not None and sample.case_id not in known:
             errors.append(DatasetError(lineno, f"case_id {sample.case_id!r} is not in the dataset"))
             continue
 

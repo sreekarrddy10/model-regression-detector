@@ -77,6 +77,10 @@ def cmd_build(args: argparse.Namespace) -> int:
     authoring.write_jsonl(result.cases, args.cases)
     _out(f"{args.cases.name}: {result.summary}")
 
+    # Validate the cases - leakage included - before the holdout gets a chance to
+    # raise. An incomplete holdout must not hide a leaked case.
+    load_cases(args.cases, prompts_root=args.prompts)
+
     if args.holdout_yaml.exists():
         samples = authoring.build_holdout(args.holdout_yaml, args.holdout, now=now)
         authoring.write_jsonl(samples, args.holdout)

@@ -103,8 +103,8 @@ class GoldenCase:          # data/golden/emails.jsonl (one object per line)
     input_email: str
     expected_category: Literal["billing", "technical", "account", "general"]
     expected_summary: str
-    difficulty: Literal["easy", "ambiguous", "adversarial"]
-    critical: bool       # blocks merge if it regresses
+    difficulty: Literal["easy", "medium", "hard"]     # how demanding
+    strata: tuple[Literal["ambiguous", "adversarial", "critical"], ...]  # overlapping tags
     source: Literal["handwritten", "from_failure"]
     notes: str           # why this case matters
     added_at: datetime

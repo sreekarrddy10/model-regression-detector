@@ -8,7 +8,12 @@ import pytest
 from pydantic import ValidationError
 
 from mrd.dataset import hashing, report
-from mrd.dataset.loader import DatasetValidationError, load_cases, load_holdout
+from mrd.dataset.loader import (
+    DatasetValidationError,
+    _normalize,
+    load_cases,
+    load_holdout,
+)
 from mrd.dataset.schema import GoldenCase, HoldoutSample
 
 pytestmark = pytest.mark.unit
@@ -23,7 +28,7 @@ def case(**overrides: object) -> dict[str, object]:
         "expected_category": "billing",
         "expected_summary": "Customer was billed twice in August.",
         "difficulty": "easy",
-        "critical": False,
+        "strata": [],
         "source": "handwritten",
         "notes": "Baseline duplicate-charge case.",
         "added_at": NOW.isoformat(),
@@ -48,7 +53,7 @@ def test_valid_case_loads() -> None:
     assert GoldenCase.model_validate(case()).id == "tc_0001"
 
 
-@pytest.mark.parametrize("bad_id", ["tc_1", "TC_0001", "case_0001", "tc_00001"])
+@pytest.mark.parametrize("bad_id", ["tc_1", "TC_0001", "0001", "tc_00001", "tc-", "tc_12345"])
 def test_case_id_format_enforced(bad_id: str) -> None:
     with pytest.raises(ValidationError):
         GoldenCase.model_validate(case(id=bad_id))
@@ -180,8 +185,8 @@ def test_hash_is_order_independent(tmp_path: Path) -> None:
     [
         ("expected_category", "technical"),
         ("expected_summary", "Something else entirely."),
-        ("difficulty", "adversarial"),
-        ("critical", True),
+        ("difficulty", "hard"),
+        ("strata", ["critical"]),
         ("input_email", "different text"),
     ],
 )
@@ -193,7 +198,7 @@ def test_any_label_change_changes_the_hash(tmp_path: Path, field: str, value: ob
 
 
 def test_lock_round_trips(tmp_path: Path) -> None:
-    dataset = load_cases(write(tmp_path / "e.jsonl", [case(critical=True)]))
+    dataset = load_cases(write(tmp_path / "e.jsonl", [case(strata=["critical"])]))
     lock = hashing.build_lock(dataset, version="v1", now=NOW)
 
     restored = hashing.Lock.from_json(lock.to_json())
@@ -236,11 +241,11 @@ def holdout(**overrides: object) -> dict[str, object]:
     payload: dict[str, object] = {
         "id": "ho_0001",
         "case_id": "tc_0001",
-        "summary": "Customer was billed twice in August.",
+        "candidate_summary": "Customer was billed twice in August.",
         "human_score": 5,
         "scorer": "sreekar",
         "scored_at": NOW.isoformat(),
-        "notes": "",
+        "rationale": "",
     }
     payload.update(overrides)
     return payload
@@ -324,7 +329,7 @@ def test_holdout_reports_all_errors_with_line_numbers(tmp_path: Path) -> None:
                 "{not json",
                 json.dumps(holdout(id="ho_0002", human_score=9)),
                 json.dumps(holdout(id="ho_0003")),
-                json.dumps(holdout(id="ho_0003", summary="dupe")),
+                json.dumps(holdout(id="ho_0003", candidate_summary="dupe")),
             ]
         )
         + "\n",
@@ -357,19 +362,21 @@ def _full_dataset(tmp_path: Path) -> Path:
     categories = ["billing", "technical", "account", "general"]
     for i in range(80):
         category = categories[i % 4]
+        difficulty = ("hard", "medium", "easy")[i % 3]
+        strata: list[str] = []
         if i < 12:
-            difficulty = "adversarial"
-        elif i < 28:
-            difficulty = "ambiguous"
-        else:
-            difficulty = "easy"
+            strata.append("adversarial")
+        if i < 28:
+            strata.append("ambiguous")
+        if i < 10:
+            strata.append("critical")
         rows.append(
             case(
                 id=f"tc_{i:04d}",
                 input_email=f"Distinct email body number {i}.",
                 expected_category=category,
                 difficulty=difficulty,
-                critical=i < 10,
+                strata=strata,
             )
         )
     return write(tmp_path / "full.jsonl", rows)
@@ -398,3 +405,109 @@ def test_narrow_holdout_spread_is_flagged(tmp_path: Path) -> None:
     result = report.build(dataset, samples)
 
     assert any("spread is narrow" in w for w in result.warnings)
+
+
+# --------------------------------------------------------------------------- #
+# Near-duplicate leakage
+# --------------------------------------------------------------------------- #
+
+
+def test_reworded_few_shot_example_is_caught(tmp_path: Path, repo_root: Path, prompt_v001) -> None:
+    """The failure exact matching misses: same scenario, different words.
+
+    A case the model was shown will essentially always pass, so it measures
+    recall rather than capability - and if it is tagged critical, it is a
+    merge-blocking sentinel that structurally cannot fail.
+    """
+    original = prompt_v001.few_shot[2].email
+    reworded = (
+        "I lost my phone with my authenticator app and now I can't get past the "
+        "2FA screen. I have no backup codes. Please help me regain access."
+    )
+    assert _normalize(reworded) != _normalize(original), "must not be an exact duplicate"
+
+    path = write(tmp_path / "e.jsonl", [case(input_email=reworded, strata=["critical"])])
+    with pytest.raises(DatasetValidationError) as exc:
+        load_cases(path, prompts_root=repo_root / "prompts")
+
+    message = exc.value.errors[0].message
+    assert "token-overlapping" in message
+    assert "tagged critical" in message
+
+
+def test_unrelated_case_is_not_flagged(tmp_path: Path, repo_root: Path) -> None:
+    path = write(
+        tmp_path / "e.jsonl",
+        [case(input_email="Please send me a copy of my October invoice for our records.")],
+    )
+    assert len(load_cases(path, prompts_root=repo_root / "prompts")) == 1
+
+
+def test_very_short_inputs_do_not_trip_the_overlap_check(tmp_path: Path, repo_root: Path) -> None:
+    """A one-word 'broken' shares tokens with everything by accident."""
+    path = write(tmp_path / "e.jsonl", [case(input_email="broken")])
+    assert len(load_cases(path, prompts_root=repo_root / "prompts")) == 1
+
+
+def test_overlap_is_symmetric_and_bounded() -> None:
+    from mrd.dataset.loader import overlap
+
+    assert overlap("a b c", "a b c") == pytest.approx(1.0)
+    assert overlap("a b c", "x y z") == pytest.approx(0.0)
+    assert overlap("a b c", "b c d") == pytest.approx(overlap("b c d", "a b c"))
+
+
+# --------------------------------------------------------------------------- #
+# Two axes
+# --------------------------------------------------------------------------- #
+
+
+def test_critical_is_derived_from_strata() -> None:
+    plain = GoldenCase.model_validate(case())
+    tagged = GoldenCase.model_validate(case(strata=["ambiguous", "critical"]))
+
+    assert plain.critical is False
+    assert tagged.critical is True
+    assert tagged.difficulty == "easy", "difficulty is independent of strata"
+
+
+def test_a_case_may_carry_several_strata() -> None:
+    parsed = GoldenCase.model_validate(
+        case(difficulty="hard", strata=["ambiguous", "adversarial", "critical"])
+    )
+    assert len(parsed.strata) == 3
+
+
+@pytest.mark.parametrize("bad", ["trivial", "ambiguous", "adversarial"])
+def test_old_difficulty_values_are_rejected(bad: str) -> None:
+    """ambiguous/adversarial are strata now, not difficulties."""
+    with pytest.raises(ValidationError):
+        GoldenCase.model_validate(case(difficulty=bad))
+
+
+def test_category_prefixed_ids_are_accepted() -> None:
+    assert GoldenCase.model_validate(case(id="bill-001")).id == "bill-001"
+
+
+# --------------------------------------------------------------------------- #
+# Self-contained holdout
+# --------------------------------------------------------------------------- #
+
+
+def test_a_holdout_sample_may_carry_its_own_email_and_reference() -> None:
+    sample = HoldoutSample.model_validate(
+        {
+            **{k: v for k, v in holdout().items() if k != "case_id"},
+            "email": "I was charged twice.",
+            "reference_summary": "Customer was charged twice.",
+        }
+    )
+    assert sample.case_id is None
+    assert sample.email
+
+
+def test_a_holdout_sample_with_neither_link_nor_reference_is_rejected() -> None:
+    """Calibration cannot score a candidate against nothing."""
+    payload = {k: v for k, v in holdout().items() if k != "case_id"}
+    with pytest.raises(ValidationError, match="case_id"):
+        HoldoutSample.model_validate(payload)

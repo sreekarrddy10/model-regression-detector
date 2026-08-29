@@ -266,7 +266,7 @@ def _holdout(pairs: list[tuple[str, int]]) -> tuple[HoldoutSample, ...]:
         HoldoutSample(
             id=f"ho_{i:04d}",
             case_id="tc_0000",
-            summary=summary,
+            candidate_summary=summary,
             human_score=score,
             scorer="human",
             scored_at=NOW,

@@ -30,7 +30,7 @@ def _dataset(count: int, *, critical: int = 0) -> Dataset:
             make_case(
                 i,
                 critical=i < critical,
-                difficulty=("easy", "ambiguous", "adversarial")[i % 3],
+                difficulty=("easy", "medium", "hard")[i % 3],
             )
             for i in range(count)
         ),
@@ -148,7 +148,7 @@ def workspace(tmp_path: Path, repo_root: Path) -> list[str]:
             id=f"tc_{i:04d}",
             input_email=f"Distinct email body number {i}.",
             expected_category="billing",
-            critical=(i == 0),
+            strata=(["critical"] if i == 0 else []),
         )
         for i in range(4)
     ]
