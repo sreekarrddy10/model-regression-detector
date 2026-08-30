@@ -32,7 +32,13 @@ class OpenAIProvider(Provider):
             # KeyError on missing key is deliberate (ECC rules/python/security.md):
             # fail loudly at call time rather than sending an unauthenticated request.
             key = self._api_key or os.environ["OPENAI_API_KEY"]
-            self._client = AsyncOpenAI(api_key=key)
+            # max_retries=0 is load-bearing, not a preference. The SDK retries
+            # internally with its own backoff, and that backoff lands inside the
+            # perf_counter window below - so a rate-limited call was recorded as a
+            # 16-second model response, and the gate treats latency drift as a
+            # regression. mrd.retry is the one retry layer; the SDK must not add a
+            # second one underneath it.
+            self._client = AsyncOpenAI(api_key=key, max_retries=0)
         return self._client
 
     async def complete(self, request: Request) -> Response:

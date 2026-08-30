@@ -315,6 +315,15 @@ class FlakyJudgeProvider:
         )
 
 
+def test_retry_policy_clears_a_per_minute_rate_limit_window() -> None:
+    """The defaults are load-bearing: 3 attempts at 0.5s lost a third of the
+    judge scores against a live 30k-TPM ceiling."""
+    from mrd import retry as retry_mod
+
+    delays = [retry_mod.BACKOFF_BASE_SECONDS * (2**i) for i in range(retry_mod.MAX_ATTEMPTS - 1)]
+    assert sum(delays) >= 6.0, f"total backoff {sum(delays)}s is too short for a 60s window"
+
+
 def test_calibration_retries_a_rate_limited_judge() -> None:
     """A 429 is the normal weather of a live eval, not a verdict on the judge."""
     pairs = [(f"s{i}", (i % 5) + 1) for i in range(20)]

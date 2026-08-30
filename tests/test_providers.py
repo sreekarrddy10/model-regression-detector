@@ -8,6 +8,7 @@ payloads - no network, no SDK installed, no API key.
 from __future__ import annotations
 
 import json
+import sys
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -99,6 +100,50 @@ def test_anthropic_falls_back_to_text_block() -> None:
         usage=SimpleNamespace(input_tokens=1, output_tokens=1),
     )
     assert anthropic_provider.normalize(raw, REQUEST, 5).text == "plain prose"
+
+
+# --------------------------------------------------------------------------- #
+# One retry layer, not two
+# --------------------------------------------------------------------------- #
+
+
+class _RecordingSDK:
+    """Captures the kwargs the provider constructs its client with."""
+
+    def __init__(self) -> None:
+        self.kwargs: dict[str, object] = {}
+
+    def __call__(self, **kwargs):  # type: ignore[no-untyped-def]
+        self.kwargs = kwargs
+        return SimpleNamespace()
+
+
+@pytest.mark.parametrize(
+    "module,attr,provider_factory,env",
+    [
+        (
+            "openai",
+            "AsyncOpenAI",
+            lambda: openai_provider.OpenAIProvider(api_key="k"),
+            "OPENAI_API_KEY",
+        ),
+        (
+            "anthropic",
+            "AsyncAnthropic",
+            lambda: anthropic_provider.AnthropicProvider(api_key="k"),
+            "ANTHROPIC_API_KEY",
+        ),
+    ],
+)
+def test_sdk_retries_are_disabled(monkeypatch, module, attr, provider_factory, env) -> None:
+    """The SDKs retry internally with their own backoff, and that backoff falls
+    inside the latency measurement. Two retry layers turned a rate-limited call
+    into a 16-second "model response", and the gate reads latency drift as a
+    regression. mrd.retry must be the only retry layer."""
+    sdk = _RecordingSDK()
+    monkeypatch.setitem(sys.modules, module, SimpleNamespace(**{attr: sdk}))
+    provider_factory()._get_client()
+    assert sdk.kwargs["max_retries"] == 0
 
 
 # --------------------------------------------------------------------------- #

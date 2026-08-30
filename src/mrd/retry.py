@@ -17,8 +17,13 @@ from .providers.base import ProviderError
 
 logger = logging.getLogger(__name__)
 
-MAX_ATTEMPTS = 3
-BACKOFF_BASE_SECONDS = 0.5
+# Tuned against a live 30k-TPM ceiling. The eval issues judge calls as fast as
+# classifications complete, which is faster than the token budget allows, so the
+# backoff is doing double duty: it retries the failure *and* throttles the run
+# into its rate limit. 1/2/4s clears a per-minute window; 0.5/1.0s did not, and
+# a third of judge scores were lost to it.
+MAX_ATTEMPTS = 4
+BACKOFF_BASE_SECONDS = 1.0
 
 T = TypeVar("T")
 
