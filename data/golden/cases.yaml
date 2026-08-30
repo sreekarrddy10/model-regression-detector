@@ -410,12 +410,18 @@ cases:
   input_email: |
     The app won't let me add a second user. Is that broken or does my plan just
     not include more seats?
-  expected_category: technical
+  expected_category: account
   expected_summary: User cannot add a second user and asks whether it is a bug or a plan limitation.
   difficulty: medium
   strata:
   - ambiguous
-  notes: Genuinely spans a technical bug and a plan/account limit; documents the tie-break.
+  notes: 'Cannot add a second user; asks whether it is a bug or a plan limit. Labelled account,
+    not technical - seats is enumerated in the account definition, while technical is reached
+    only through the customer''s own word broken, which they offer as a hypothesis rather
+    than a claim. None of v001''s tie-breaks resolve it: they ask for a diagnosis, not an
+    action, so rule 3 has nothing to choose between. Relabelled for consistency with acct-013,
+    where seats also decides the category; letting the second dimension decide here but not
+    there was the inconsistency. Model said account 15/15 across five live runs.'
 - id: acct-001
   input_email: |
     Hi, I've tried resetting my password three times and the reset email never
