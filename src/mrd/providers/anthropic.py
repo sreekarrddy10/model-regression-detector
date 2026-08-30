@@ -8,6 +8,7 @@ one schema, regardless of provider.
 
 from __future__ import annotations
 
+import inspect
 import json
 import os
 import time
@@ -17,6 +18,32 @@ from . import pricing
 from .base import Provider, ProviderError, Request, Response, Usage
 
 _TOOL_NAME = "emit_classification"
+
+
+def _accepts_temperature(create: Any) -> bool:
+    """Does this SDK generation's `messages.create` take a temperature?
+
+    anthropic 1.x removed the parameter entirely; 0.x accepts it. Rather than
+    pinning the SDK backwards, ask the installed one. A signature we cannot read,
+    or one with **kwargs, is treated as accepting it - the SDK is then the
+    authority and will raise its own error.
+    """
+    try:
+        params = inspect.signature(create).parameters
+    except (TypeError, ValueError):  # pragma: no cover - exotic SDK shapes
+        return True
+    if any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values()):
+        return True
+    return "temperature" in params
+
+
+def _sdk_version() -> str:
+    try:
+        import anthropic
+
+        return str(getattr(anthropic, "__version__", "unknown"))
+    except ImportError:  # pragma: no cover - guarded earlier by _get_client
+        return "unknown"
 
 
 class AnthropicProvider(Provider):
@@ -43,11 +70,22 @@ class AnthropicProvider(Provider):
         client = self._get_client()
         kwargs: dict[str, Any] = {
             "model": request.model,
-            "temperature": request.temperature,
             "max_tokens": request.max_tokens,
             "system": request.system,
             "messages": [{"role": "user", "content": request.user}],
         }
+        if request.temperature is not None:
+            if not _accepts_temperature(client.messages.create):
+                raise ProviderError(
+                    f"the installed anthropic SDK ({_sdk_version()}) does not accept a "
+                    f"temperature, so temperature={request.temperature} cannot be honoured. "
+                    "Dropping it silently would let the provider sample at its own default "
+                    "while the prompt still declares determinism, and this gate would then "
+                    "report its own flakiness as model drift. Either pin 'anthropic<1.0', "
+                    "or set the request temperature to None to run at the provider default "
+                    "and accept that the run makes no determinism claim."
+                )
+            kwargs["temperature"] = request.temperature
         if request.json_schema is not None:
             kwargs["tools"] = [
                 {

@@ -25,12 +25,20 @@ class Request:
     `json_schema`, when set, instructs the provider to enforce structured output
     using whatever native mechanism it offers (OpenAI json_schema response format,
     Anthropic forced tool use).
+
+    `temperature` is None only as a deliberate opt-out: it means "run at whatever
+    the provider defaults to, and claim no determinism for this run". Some SDK
+    generations expose no temperature control at all (anthropic 1.x removed it),
+    and a gate that silently sampled at the provider default would report its own
+    flakiness as model drift. Providers therefore refuse a temperature they
+    cannot honour rather than dropping it. None is recorded in the fingerprint,
+    so a run that made no determinism claim is distinguishable after the fact.
     """
 
     model: str
     system: str
     user: str
-    temperature: float = 0.0
+    temperature: float | None = 0.0
     max_tokens: int = 512
     json_schema: dict[str, Any] | None = None
 

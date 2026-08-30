@@ -39,13 +39,14 @@ class OpenAIProvider(Provider):
         client = self._get_client()
         kwargs: dict[str, Any] = {
             "model": request.model,
-            "temperature": request.temperature,
             "max_tokens": request.max_tokens,
             "messages": [
                 {"role": "system", "content": request.system},
                 {"role": "user", "content": request.user},
             ],
         }
+        if request.temperature is not None:
+            kwargs["temperature"] = request.temperature
         if request.json_schema is not None:
             kwargs["response_format"] = {
                 "type": "json_schema",
