@@ -13,7 +13,11 @@ on:
   pull_request:
     branches: [main]
   schedule:
-    - cron: "17 4 * * *"
+    # Weekly, not nightly. The scheduled run exists to feed the EWMA slow-drift
+    # series, which needs regular samples but not daily ones - and at tier=full
+    # a nightly run bills a full eval every day against a repo nobody pushed to.
+    # Sunday 04:17 UTC keeps drift detection at about a seventh of the cost.
+    - cron: "17 4 * * 0"
   workflow_dispatch:
 
 concurrency:

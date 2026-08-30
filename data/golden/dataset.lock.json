@@ -1,0 +1,22 @@
+{
+  "by_category": {
+    "account": 21,
+    "billing": 21,
+    "general": 20,
+    "technical": 18
+  },
+  "by_difficulty": {
+    "easy": 24,
+    "hard": 25,
+    "medium": 31
+  },
+  "by_source": {
+    "from_failure": 0,
+    "handwritten": 80
+  },
+  "count": 80,
+  "critical_count": 12,
+  "generated_at": "2026-08-30T23:29:35.807473+00:00",
+  "sha256": "a9a6313ad0e9cff18aa74dc43a03f5934e44384eeeb9cb8f407154e29ad80173",
+  "version": "v1"
+}
