@@ -310,14 +310,17 @@ cases:
   input_email: |
     I can't log in because the 2FA text with the code never arrives. I've
     requested it a dozen times. I'm completely locked out.
-  expected_category: technical
+  expected_category: account
   expected_summary: User is locked out because the 2FA verification code is never delivered.
   difficulty: hard
   strata:
   - ambiguous
   - critical
-  notes: Delivery failure (technical) causing an access lockout (account); either route is
-    defensible.
+  notes: Locked out because the 2FA code never arrives. Labelled account, not technical -
+    v001 lists MFA under the account definition, and tie-break rule 2 routes anyone who cannot
+    sign in to account even when they call it a bug. Relabelled after the first live baseline,
+    where it failed 3/3 as technical; a critical case that can never pass is a sentinel that
+    can never detect anything.
 - id: tech-012
   input_email: |
     When I import a CSV of leads, the progress bar completes but none of the
