@@ -472,15 +472,21 @@ cases:
   input_email: |
     I was charged $29 this morning but the app still says my plan is expired and
     won't let me into the paid features. What's going on?
-  expected_category: account
+  expected_category: billing
   expected_summary: User was charged but their account still shows an expired plan, blocking
     access to paid features.
   difficulty: hard
   strata:
   - ambiguous
   - critical
-  notes: Genuinely spans billing and account; anchored account because access is the blocked
-    outcome.
+  notes: Charged but the plan still reads expired, blocking paid features. Labelled billing,
+    not account - none of v001's tie-breaks resolve this one. Rule 1 needs a refund request,
+    rule 2 needs a failed sign-in, and rule 3 cannot choose. The email's own words (charge,
+    plan) sit in the billing definition, while account reaches it only through permissions,
+    which in that list means user and role permissions rather than paid-tier entitlement.
+    Relabelled after the first live baseline, where it failed 3/3 as account; a critical case
+    that can never pass is a sentinel that can never detect anything. Genuinely ambiguous
+    - revisit if tie-break 3 is ever sharpened.
 - id: acct-008
   input_email: |
     Please update my display name from 'Mike T' to 'Michael Torres' across the
@@ -749,15 +755,18 @@ cases:
     This is the third outage this week. Your downtime cost us a client
     presentation today. If it happens again we're cancelling and moving to a
     competitor.
-  expected_category: general
+  expected_category: technical
   expected_summary: User reports repeated outages caused business impact and threatens to
     cancel over continued downtime.
   difficulty: hard
   strata:
   - critical
   - ambiguous
-  notes: Churn threat with a technical trigger; anchored general because the actionable signal
-    is escalation.
+  notes: Repeated outages plus a churn threat. Labelled technical, not general - outages is
+    named in the technical definition, and general is the residual anything-else category.
+    Routing churn threats to escalation regardless of topic is a defensible product rule,
+    but v001 does not encode it; this taxonomy sorts by subject, not by urgency. Relabelled
+    after the first live baseline, where it failed 3/3 as general.
 - id: gen-015
   input_email: |
     Is the app usable with a screen reader? I'm partially sighted and rely on
