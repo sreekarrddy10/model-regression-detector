@@ -18,13 +18,20 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from ..dataset.schema import HoldoutSample
-from ..providers.base import Provider
+from ..providers.base import Provider, ProviderError
+from ..retry import BACKOFF_BASE_SECONDS, MAX_ATTEMPTS, with_retry
 from ..stats import quadratic_weighted_kappa, spearman
 from .judge import score_summary
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_KAPPA_FLOOR = 0.60
+
+# A provider that rate-limits half the holdout would otherwise yield a confident
+# kappa computed on whatever survived. Retrying is not enough on its own: it
+# turns a loud abort into a quiet one. Calibration must also refuse to speak for
+# a holdout it mostly failed to score.
+DEFAULT_MIN_SCORED_RATIO = 0.80
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,15 +41,30 @@ class Calibration:
     sample_count: int
     scored_count: int
     floor: float
+    min_scored_ratio: float = DEFAULT_MIN_SCORED_RATIO
+
+    @property
+    def enough_scored(self) -> bool:
+        """Did enough of the holdout survive for the number to mean anything?"""
+        if self.sample_count == 0:
+            return False
+        return self.scored_count / self.sample_count >= self.min_scored_ratio
 
     @property
     def passed(self) -> bool:
-        return self.scored_count > 0 and self.kappa >= self.floor
+        return self.scored_count > 0 and self.enough_scored and self.kappa >= self.floor
 
     @property
     def reason(self) -> str:
         if self.scored_count == 0:
             return "judge produced no parseable verdicts on the holdout"
+        if not self.enough_scored:
+            return (
+                f"only {self.scored_count} of {self.sample_count} holdout summaries could be "
+                f"scored ({self.min_scored_ratio:.0%} required). A kappa computed on the "
+                "remainder would describe whichever samples the provider happened to serve, "
+                "so the run is aborted rather than reported."
+            )
         if self.passed:
             return (
                 f"judge agrees with human scores "
@@ -71,6 +93,9 @@ async def calibrate(
     model: str,
     floor: float = DEFAULT_KAPPA_FLOOR,
     concurrency: int = 4,
+    attempts: int = MAX_ATTEMPTS,
+    backoff_base: float = BACKOFF_BASE_SECONDS,
+    min_scored_ratio: float = DEFAULT_MIN_SCORED_RATIO,
 ) -> Calibration:
     """Score every holdout summary with the judge and measure agreement.
 
@@ -94,13 +119,25 @@ async def calibrate(
             return None
         email, reference = resolved
         async with semaphore:
-            result = await score_summary(
-                email,
-                reference,
-                sample.candidate_summary,
-                provider,
-                model=model,
-            )
+            try:
+                result = await with_retry(
+                    lambda: score_summary(
+                        email,
+                        reference,
+                        sample.candidate_summary,
+                        provider,
+                        model=model,
+                    ),
+                    attempts=attempts,
+                    backoff_base=backoff_base,
+                    label=f"judge calibration {sample.id}",
+                )
+            except ProviderError as exc:
+                # Survivable: one unscored sample lowers scored_count, and the
+                # coverage guard above decides whether what is left still counts.
+                # Aborting here would let a rate limit masquerade as a bad judge.
+                logger.warning("holdout %s could not be scored: %s", sample.id, exc)
+                return None
         if result.verdict is None:
             return None
         return sample.human_score, result.verdict.score
@@ -109,7 +146,12 @@ async def calibrate(
 
     if not pairs:
         return Calibration(
-            kappa=0.0, spearman=0.0, sample_count=len(holdout), scored_count=0, floor=floor
+            kappa=0.0,
+            spearman=0.0,
+            sample_count=len(holdout),
+            scored_count=0,
+            floor=floor,
+            min_scored_ratio=min_scored_ratio,
         )
 
     human = [p[0] for p in pairs]
@@ -120,4 +162,5 @@ async def calibrate(
         sample_count=len(holdout),
         scored_count=len(pairs),
         floor=floor,
+        min_scored_ratio=min_scored_ratio,
     )

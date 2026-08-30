@@ -11,11 +11,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import TypeVar
 
+from . import retry
 from .dataset.loader import Dataset
 from .dataset.schema import GoldenCase
 from .feature.classifier import classify
@@ -24,13 +24,14 @@ from .graders.judge import score_summary
 from .prompts import PromptConfig
 from .providers.base import Provider, ProviderError
 from .results import CaseResult, EvalRun, RunOutcome
+from .retry import with_retry
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_CONCURRENCY = 8
 DEFAULT_REPEATS = 3
-MAX_ATTEMPTS = 3
-BACKOFF_BASE_SECONDS = 0.5
+MAX_ATTEMPTS = retry.MAX_ATTEMPTS
+BACKOFF_BASE_SECONDS = retry.BACKOFF_BASE_SECONDS
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,33 +47,6 @@ class RunConfig:
     backoff_base: float = BACKOFF_BASE_SECONDS
 
 
-T = TypeVar("T")
-
-
-async def _with_retry(
-    factory: Callable[[], Awaitable[T]],
-    *,
-    attempts: int,
-    backoff_base: float,
-    label: str,
-) -> T:
-    """Retry transient provider failures with exponential backoff."""
-    if attempts < 1:
-        raise ValueError(f"attempts must be >= 1, got {attempts}")
-
-    for attempt in range(attempts):
-        try:
-            return await factory()
-        except ProviderError as exc:
-            if attempt + 1 >= attempts:
-                raise
-            delay = backoff_base * (2**attempt)
-            logger.warning("%s failed (attempt %d/%d): %s", label, attempt + 1, attempts, exc)
-            await asyncio.sleep(delay)
-
-    raise ProviderError(f"{label}: retry loop exhausted")  # unreachable
-
-
 async def _run_one(
     case: GoldenCase,
     repeat_idx: int,
@@ -84,7 +58,7 @@ async def _run_one(
     label = f"{case.id} r{repeat_idx}"
 
     try:
-        outcome = await _with_retry(
+        outcome = await with_retry(
             lambda: classify(case.input_email, prompt, provider),
             attempts=config.max_attempts,
             backoff_base=config.backoff_base,
@@ -119,7 +93,7 @@ async def _run_one(
     if judge_provider is not None and config.judge_model and outcome.classification is not None:
         summary = outcome.classification.summary
         try:
-            verdict = await _with_retry(
+            verdict = await with_retry(
                 lambda: score_summary(
                     case.input_email,
                     case.expected_summary,

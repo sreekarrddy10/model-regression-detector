@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from mrd.compare import measure
@@ -285,6 +287,120 @@ def _calibrate(mapping: dict[str, int], pairs: list[tuple[str, int]]) -> Calibra
             model="gpt-4o",
         )
     )
+
+
+class FlakyJudgeProvider:
+    """Fails the first `fail_times` calls for each summary, then answers."""
+
+    name = "flaky"
+
+    def __init__(self, mapping: dict[str, int], *, fail_times: int) -> None:
+        self._mapping = mapping
+        self._fail_times = fail_times
+        self.calls: dict[str, int] = {}
+
+    async def complete(self, request):  # type: ignore[no-untyped-def]
+        summary = request.user.rsplit("Candidate summary:\n", 1)[-1].strip()
+        self.calls[summary] = self.calls.get(summary, 0) + 1
+        if self.calls[summary] <= self._fail_times:
+            raise ProviderError("Error code: 429 - Rate limit reached")
+        return Response(
+            text=json.dumps({"score": self._mapping[summary], "rationale": "ok"}),
+            model=request.model,
+            provider="flaky",
+            usage=Usage(1, 1),
+            latency_ms=1,
+            cost_usd=None,
+            fingerprint=request.fingerprint(),
+        )
+
+
+def test_calibration_retries_a_rate_limited_judge() -> None:
+    """A 429 is the normal weather of a live eval, not a verdict on the judge."""
+    pairs = [(f"s{i}", (i % 5) + 1) for i in range(20)]
+    provider = FlakyJudgeProvider({s: score for s, score in pairs}, fail_times=2)
+    result = drive(
+        calibrate(
+            _holdout(pairs),
+            emails={"tc_0000": "email body"},
+            references={"tc_0000": "reference summary"},
+            provider=provider,
+            model="gpt-4o",
+            backoff_base=0.0,
+        )
+    )
+    assert result.scored_count == 20
+    assert result.passed
+    assert all(n == 3 for n in provider.calls.values())
+
+
+def test_a_sample_that_never_succeeds_lowers_the_count_but_does_not_abort() -> None:
+    """One dead sample must not kill a run before a single case is classified."""
+    pairs = [(f"s{i}", (i % 5) + 1) for i in range(20)]
+    mapping = {s: score for s, score in pairs}
+    provider = FlakyJudgeProvider(mapping, fail_times=0)
+    provider._fail_times = 0
+    doomed = "s0"
+
+    original = provider.complete
+
+    async def complete(request):  # type: ignore[no-untyped-def]
+        if request.user.rsplit("Candidate summary:\n", 1)[-1].strip() == doomed:
+            raise ProviderError("Error code: 429 - Rate limit reached")
+        return await original(request)
+
+    provider.complete = complete  # type: ignore[method-assign]
+    result = drive(
+        calibrate(
+            _holdout(pairs),
+            emails={"tc_0000": "email body"},
+            references={"tc_0000": "reference summary"},
+            provider=provider,
+            model="gpt-4o",
+            backoff_base=0.0,
+        )
+    )
+    assert result.scored_count == 19
+    assert result.sample_count == 20
+    assert result.passed  # 19/20 clears the 80% coverage floor
+
+
+def test_a_mostly_unscored_holdout_refuses_to_report_a_kappa() -> None:
+    """Retrying must not turn a loud abort into a quiet one: a kappa from the
+    handful of samples the provider happened to serve describes nothing."""
+    pairs = [(f"s{i}", (i % 5) + 1) for i in range(20)]
+    mapping = {s: score for s, score in pairs}
+    provider = FlakyJudgeProvider(mapping, fail_times=0)
+    survivors = {"s0", "s1", "s2", "s3", "s4"}
+
+    async def complete(request):  # type: ignore[no-untyped-def]
+        summary = request.user.rsplit("Candidate summary:\n", 1)[-1].strip()
+        if summary not in survivors:
+            raise ProviderError("Error code: 429 - Rate limit reached")
+        return Response(
+            text=json.dumps({"score": mapping[summary], "rationale": "ok"}),
+            model=request.model,
+            provider="flaky",
+            usage=Usage(1, 1),
+            latency_ms=1,
+            cost_usd=None,
+            fingerprint=request.fingerprint(),
+        )
+
+    provider.complete = complete  # type: ignore[method-assign]
+    result = drive(
+        calibrate(
+            _holdout(pairs),
+            emails={"tc_0000": "email body"},
+            references={"tc_0000": "reference summary"},
+            provider=provider,
+            model="gpt-4o",
+            backoff_base=0.0,
+        )
+    )
+    assert result.kappa == pytest.approx(1.0)  # perfect on what it scored...
+    assert not result.passed  # ...and still refused
+    assert "could be scored" in result.reason
 
 
 def test_agreeing_judge_passes_calibration() -> None:
