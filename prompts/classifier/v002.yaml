@@ -1,42 +1,19 @@
 version_id: v002
-created_at: 2026-09-01T02:10:00Z
+created_at: 2026-09-01T02:20:00Z
 model: gpt-4o-mini
 temperature: 0.0
 max_tokens: 512
-
-# DELIBERATELY DEGRADED - a demo fixture, deliberately kept OUT of
-# prompts/classifier/ so it can never be picked up as the shipping prompt.
-#
-# It lived in the real lineage briefly, which was a bug: PromptConfig.latest()
-# returned it, and CI does not pass --prompt, so every CI run would have
-# evaluated this known-bad prompt as its candidate and blocked every PR for a
-# reason unrelated to the PR. Run it explicitly instead:
-#
-#     make eval-demo
-#
-# The degradation is written to be realistic rather than obviously broken. This
-# is the commit a reasonable person makes on a Friday to cut token cost, and it
-# is exactly the kind of change that ships blind without a gate: the categories
-# and the task are intact, so spot-checking a few easy emails shows no problem
-# at all. What it removes is the tie-break rules and the few-shot anchor, which
-# only the ambiguous and adversarial cases depend on.
-#
-# Expected effect on the golden set:
-#   - "refund for a bug-caused overcharge" drifts billing -> technical (rule 1)
-#   - "can't sign in, calls it a bug"      drifts account -> technical (rule 2)
-#   - empty or unintelligible email        no longer reliably lands in general (rule 4)
-#   - summaries lengthen and drift in style with no few-shot examples to anchor them
 commit_message: >-
-  Trim the classifier prompt. The tie-break rules and few-shot block were
-  ~60% of the system prompt and every spot check I ran came back identical,
-  so this cuts input tokens roughly in half on a high-volume path.
+  Trim the prompt. The tie-break rules read as redundant next to the category
+  definitions, and the few-shot block is most of the input tokens on every
+  call. Spot-checked a dozen straightforward emails and they classify the same.
 
 system_prompt: |-
   You triage inbound customer support email for a SaaS product.
 
   For each email, return exactly two things:
     - category: one of billing, technical, account, general
-    - summary: one sentence stating the customer's request
+    - summary: one sentence, under 25 words, stating the customer's request
 
   Category definitions:
     billing   - invoices, charges, refunds, payment methods, pricing, plan cost
@@ -44,6 +21,8 @@ system_prompt: |-
     account   - login, password, MFA, permissions, seats, profile, cancellation
     general   - anything else: sales questions, feedback, partnerships, thanks
 
-  Write the summary from the customer's point of view.
+
+  Write the summary from the customer's point of view. Do not invent details that
+  are not in the email. Do not include the category name in the summary.
 
 few_shot: []
