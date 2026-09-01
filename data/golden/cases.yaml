@@ -616,13 +616,12 @@ cases:
     No puedo entrar a mi cuenta, dice "user not found" pero pagué el mes pasado.
     Please help, I need access today.
   expected_category: account
-  expected_summary: User cannot access their account despite an active paid subscription,
-    reported in mixed Spanish and English.
+  expected_summary: User cannot access their account despite an active paid subscription.
   difficulty: hard
   strata:
   - adversarial
   - ambiguous
-  notes: Mixed-language; account-access primary with a billing signal that could mislead.
+  notes: 'Mixed Spanish and English, with the request in both. Tests that a non-English body does not derail routing. The language observation lives here, not in expected_summary - it describes the email rather than the customer''s request, and a judge comparing candidates against it penalised summaries that correctly left it out.'
 - id: acct-020
   input_email: |
     I got this: 'New sign-in from Lagos, Nigeria — if this wasn't you, secure
