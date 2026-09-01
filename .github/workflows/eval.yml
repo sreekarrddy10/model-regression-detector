@@ -178,6 +178,19 @@ jobs:
   gate:
     name: eval gate
     needs: [quality, dataset, tier]
+    # The workflow-level concurrency group is keyed on the ref, so evals on
+    # different branches run in parallel. The provider rate limit is not
+    # per-branch - it is one org-wide token-per-minute budget - so parallel evals
+    # starve each other. Three runs landed within 30 seconds once and the judge
+    # lost 7 of 20 holdout samples to 429s, which correctly failed calibration
+    # and blocked a healthy baseline.
+    #
+    # This group has no ref in it, so gate jobs queue behind one another across
+    # the whole repository. cancel-in-progress stays false: a queued eval is
+    # worth waiting for, and cancelling one wastes the API spend already made.
+    concurrency:
+      group: mrd-eval-gate
+      cancel-in-progress: false
     if: needs.tier.outputs.tier != 'none' && needs.tier.outputs.locked == 'true'
     runs-on: ubuntu-latest
     permissions:
