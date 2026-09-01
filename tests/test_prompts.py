@@ -75,13 +75,28 @@ def test_latest_returns_highest_version(repo_root: Path) -> None:
 def test_the_degraded_fixture_is_not_in_the_shipping_lineage(repo_root: Path) -> None:
     """CI does not pass --prompt, so latest() must never resolve to a demo prompt.
 
-    This regressed once: v002 lived in prompts/classifier/, latest() returned it,
-    and every CI run would have evaluated the known-bad prompt as its candidate.
+    This regressed once: the demo v002 lived in prompts/classifier/, latest()
+    returned it, and every CI run would have evaluated the known-bad prompt as
+    its candidate.
+
+    The guard used to assert `latest() == "v001"` and ban the filename
+    "v002.yaml" outright, which also made it impossible to ever ship a second
+    prompt version - a much broader claim than the leak it exists to prevent.
+    It now asserts the actual invariant: the fixture stays in prompts/demo, and
+    no shipping prompt is that fixture.
     """
-    shipping = sorted(p.name for p in (repo_root / "prompts" / "classifier").glob("v*.yaml"))
-    assert "v002.yaml" not in shipping
-    assert (repo_root / "prompts" / "demo" / "classifier" / "v002.yaml").exists()
-    assert PromptConfig.latest(root=repo_root / "prompts").version_id == "v001"
+    demo = repo_root / "prompts" / "demo" / "classifier" / "v002.yaml"
+    assert demo.exists(), "the degraded fixture must stay in prompts/demo"
+
+    demo_prompt = PromptConfig.load("v002", root=repo_root / "prompts" / "demo").system_prompt
+    shipping = sorted((repo_root / "prompts" / "classifier").glob("v*.yaml"))
+    assert shipping, "there must be at least one shipping prompt"
+    for path in shipping:
+        config = PromptConfig.from_file(path)
+        assert config.system_prompt.strip() != demo_prompt.strip(), (
+            f"{path.name} is the degraded demo fixture; CI would evaluate a "
+            "known-bad prompt as its candidate"
+        )
 
 
 def test_degraded_variant_is_actually_degraded(repo_root: Path) -> None:
