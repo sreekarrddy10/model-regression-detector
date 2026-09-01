@@ -154,10 +154,22 @@ pricing, prompts and both CLIs.
 - [x] `docs/DECISIONS.md` written (D1–D8, each with its rejected alternative)
 - [x] `tasks/lessons.md` non-empty
 - [x] The degraded `v002` prompt exists, so the gate demo is one command
-- [ ] `make eval TIER=full` reproducible from config alone — **blocked on the golden cases**
-- [ ] Judge κ ≥ 0.60 recorded in repo — **blocked on the 20 holdout summaries**
-- [ ] Blocked PR + passed PR linked from README — **blocked on cases + a git remote**
-- [ ] Loom recorded — **blocked on the above**
+- [x] `make eval TIER=full` reproducible from config alone — 98.8% accuracy, local and CI agreeing
+- [x] Judge κ ≥ 0.60 recorded in repo — κ 0.96 over 20/20 holdout, see README "Measured results"
+- [~] Blocked PR + passed PR linked from README — PR #1 merged and green; the blocked
+      proof is verified locally and open at PR #2, waiting on PR #4 (cache fix) and API credit
+- [ ] Loom recorded — waiting on the blocked-PR proof being green in CI
+
+### Found by the first real deployment (none reachable offline)
+
+- [x] anthropic 1.x removed `temperature`; every live Anthropic call raised TypeError
+- [x] calibration had no retry — one 429 aborted the run before any case was classified
+- [x] two stacked retry layers put SDK backoff inside the latency measurement
+- [x] **a first run with no baseline was a hardcoded PASS** — a run where every call
+      returned 401 reported PASS and was recorded as the baseline
+- [~] **`push: branches-ignore: [main]` meant no PR ever had a baseline**, so every
+      PR took the first-run path and passed; the gate could not block anything in CI (PR #4)
+- [x] 5 label errors, all dead sentinels — cases that could never fail, or never pass
 
 Everything unchecked traces to one dependency: the hand-written golden cases.
 
