@@ -8,8 +8,13 @@ name: eval
 # Running `full` on every push would cost more than it catches.
 
 on:
+  # main is NOT ignored, and that is load-bearing. The gate restores its baseline
+  # from a cache whose last restore-key is `mrd-runs-main-`, but nothing ever
+  # wrote that cache while main was excluded from `push`. Every pull request
+  # therefore found no baseline, took the first-run path, and passed - a gate
+  # that structurally could not detect the regressions it exists to catch.
   push:
-    branches-ignore: [main]
+    branches: ['**']
   pull_request:
     branches: [main]
   schedule:
@@ -156,9 +161,13 @@ jobs:
           else
             echo "locked=false" >> "$GITHUB_OUTPUT"
           fi
+          # A push to main must be full: it is the run every later pull request
+          # compares against, and a baseline built from a sampled smoke subset
+          # would make those comparisons meaningless.
           if [ "${{ github.event_name }}" = "pull_request" ] \
              || [ "${{ github.event_name }}" = "schedule" ] \
-             || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+             || [ "${{ github.event_name }}" = "workflow_dispatch" ] \
+             || [ "${{ github.ref_name }}" = "main" ]; then
             echo "tier=full" >> "$GITHUB_OUTPUT"
           elif git diff --name-only HEAD~1 HEAD | grep -qE '^(prompts/|src/mrd/)'; then
             echo "tier=smoke" >> "$GITHUB_OUTPUT"
