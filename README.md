@@ -277,9 +277,20 @@ the category definitions and drops only the tie-break rules and the few-shot
 anchor. Spot-checking easy emails shows nothing wrong, because easy emails do not
 depend on what was removed.
 
-**Not yet reproduced in CI.** The blocked-PR proof is open at #2 and is waiting on
-#4, which fixes a cache bug that made every pull request evaluate itself as a
-first run. See *Known gaps*.
+**Reproduced in CI.** [PR #2](https://github.com/sreekarrddy10/model-regression-detector/pull/2)
+carries this prompt and is blocked by the gate:
+
+```
+Cache restored from key: mrd-runs-main-33529454696
+BLOCK: 5 regressions and 1 improvement: accuracy 98.8% -> 93.8%
+  BLOCK  1 critical case(s) regressed: gen-017
+  warn   accuracy fell 5.0%; not significant (McNemar p=0.219)
+```
+
+[PR #1](https://github.com/sreekarrddy10/model-regression-detector/pull/1) is the
+passing counterpart: same dataset, same tier, merged green at 98.8%. The
+[baseline run on main](https://github.com/sreekarrddy10/model-regression-detector/actions/runs/33529454696)
+is what #2 compares against.
 
 ## Known gaps
 
@@ -290,8 +301,6 @@ Stated here rather than left to be discovered.
   errors, and five label errors were found and fixed. That supports "audited three
   ways — rule consistency, live baseline, few-shot leakage". It does not support
   "hand-verified every label".
-- **The blocked-PR proof is not yet green in CI.** Verified locally; #2 and #4 are
-  open.
 - **`technical` has thinned to 18 cases** as seat and lockout cases moved to
   `account` during review. Every coverage floor still passes.
 - **`latest_baseline` filters on `dataset_hash` but not `prompt_version`**, so
