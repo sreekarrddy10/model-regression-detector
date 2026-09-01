@@ -232,10 +232,10 @@ with CI.
 
 ## Measured results
 
-Every number below is from a real run against the locked `v1` dataset. Nothing here
+Every number below is from a real run against the locked golden dataset. Nothing here
 is estimated or projected; where a result has not been reproduced in CI, it says so.
 
-### Baseline — `v001` on dataset `v1`
+### Baseline — `v001` on dataset `v2`
 
 | Metric | Value | Where measured |
 |---|---:|---|
@@ -296,10 +296,29 @@ is what #2 compares against.
 
 Stated here rather than left to be discovered.
 
-- **68 of 80 labels have not been read case-by-case.** All 12 critical cases were
-  verified live, a cross-case consistency sweep over all 80 surfaced no further
-  errors, and five label errors were found and fixed. That supports "audited three
-  ways — rule consistency, live baseline, few-shot leakage". It does not support
+- **68 of 80 labels have not been read case-by-case.** They have been audited
+  mechanically against the field spec, which is a weaker claim than reading them.
+  What that audit covers, across all 80 cases:
+
+  | check | result |
+  |---|---|
+  | Summary under 25 words, single sentence | all pass |
+  | Summary cites a number or name absent from the email | none |
+  | Category name leaked into the summary | none |
+  | Near-duplicate emails (≥0.45 token overlap) | none |
+  | `expected_summary` reused across cases | none |
+  | Few-shot leakage against every prompt version | all ≤0.22 (threshold 0.45) |
+  | Cross-case label consistency by definitional term | no violations |
+
+  Difficulty labels are calibrated against live results — `easy` 100%, `medium`
+  97%, `hard` 95% — so the difficulty axis predicts failure rate rather than
+  being assigned by feel.
+
+  What the audit cannot catch: a case where the label and the prompt are both
+  wrong, or a summary that is accurate but emphasises the wrong thing. Both of
+  those were found by reading — `tech-011`, `gen-014`, `tech-018`, `tech-020` and
+  `acct-007` were all relabelled that way. So the defensible claim is **audited
+  three ways — rule consistency, live baseline, few-shot leakage** — not
   "hand-verified every label".
 - **`technical` has thinned to 18 cases** as seat and lockout cases moved to
   `account` during review. Every coverage floor still passes.
