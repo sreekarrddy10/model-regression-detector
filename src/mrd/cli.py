@@ -18,7 +18,12 @@ from pathlib import Path
 
 from . import paths, sampling
 from .alerts import slack
-from .compare import GateReport, IncomparableRuns, Verdict, compare, evaluate
+from .compare import (
+    IncomparableRuns,
+    compare,
+    evaluate,
+    evaluate_first_run,
+)
 from .dataset import hashing
 from .dataset.loader import DatasetValidationError, load_cases, load_holdout
 from .graders.calibration import DEFAULT_KAPPA_FLOOR, calibrate
@@ -137,9 +142,12 @@ async def _execute(args: argparse.Namespace) -> int:
         trend = sqlite.recent_accuracy(conn, dataset_hash=dataset_hash)
 
     comparison = None
-    gate = GateReport(verdict=Verdict.PASS)
     if baseline is None:
         _out("no comparable baseline yet; recording this run as the first one")
+        gate = evaluate_first_run(
+            outcome,
+            judge_calibrated=calibration is None or calibration.passed,
+        )
     else:
         comparison = compare(baseline, outcome, cases)
         gate = evaluate(

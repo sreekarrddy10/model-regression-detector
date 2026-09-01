@@ -6,6 +6,8 @@ are what a teammate will argue with when CI blocks their PR.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from mrd.compare import (
@@ -14,6 +16,7 @@ from mrd.compare import (
     Verdict,
     compare,
     evaluate,
+    evaluate_first_run,
     measure,
     percentile,
 )
@@ -314,3 +317,46 @@ def test_thresholds_are_configurable() -> None:
 
     lenient = evaluate(comparison, thresholds=Thresholds(accuracy_warn=-0.5, accuracy_block=-0.9))
     assert lenient.verdict is Verdict.PASS
+
+
+# --------------------------------------------------------------------------- #
+# First run: no baseline, but the checks that need none still apply
+# --------------------------------------------------------------------------- #
+
+
+def test_first_run_blocks_when_every_attempt_failed_at_the_provider() -> None:
+    """The bug this exists for: a CI run whose calls all returned 401 was
+    reported PASS and recorded as the baseline, so the next run compared
+    against 0% accuracy and would have read as a large improvement."""
+    outcome = make_outcome(ALL_PASS)
+    broken = replace(
+        outcome,
+        results=tuple(replace(r, error="401 Unauthorized") for r in outcome.results),
+    )
+    report = evaluate_first_run(broken)
+    assert report.verdict is Verdict.BLOCK
+    assert "measured nothing" in " ".join(report.blocking)
+
+
+def test_first_run_blocks_an_uncalibrated_judge() -> None:
+    report = evaluate_first_run(make_outcome(ALL_PASS), judge_calibrated=False)
+    assert report.verdict is Verdict.BLOCK
+    assert "failed calibration" in " ".join(report.blocking)
+
+
+def test_first_run_blocks_an_empty_run() -> None:
+    empty = replace(make_outcome(ALL_PASS), results=())
+    assert evaluate_first_run(empty).verdict is Verdict.BLOCK
+
+
+def test_first_run_blocks_below_the_sanity_floor() -> None:
+    """Not a quality bar - a prompt scoring under half on the golden set is a
+    broken baseline whatever the cause."""
+    mostly_failing = {f"tc_{i:04d}": (i < 3, i < 3, i < 3) for i in range(10)}
+    assert evaluate_first_run(make_outcome(mostly_failing)).verdict is Verdict.BLOCK
+
+
+def test_a_healthy_first_run_still_passes() -> None:
+    report = evaluate_first_run(make_outcome(ALL_PASS))
+    assert report.verdict is Verdict.PASS
+    assert report.blocking == ()

@@ -14,6 +14,9 @@ dependencies = [
 [project.optional-dependencies]
 providers = [
     "openai>=1.40",
+    # Deliberately unpinned across the 1.0 boundary: 1.x removed `temperature`
+    # from messages.create(), and the provider detects that at call time rather
+    # than freezing the SDK. See src/mrd/providers/anthropic.py.
     "anthropic>=0.34",
 ]
 e2e = [

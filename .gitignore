@@ -16,6 +16,7 @@ htmlcov/
 # Project artifacts
 data/runs.sqlite
 reports/*.html
+reports/*.md      # generated PR comment body, not source
 artifacts/
 test-results/
 

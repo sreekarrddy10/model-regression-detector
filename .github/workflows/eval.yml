@@ -13,7 +13,11 @@ on:
   pull_request:
     branches: [main]
   schedule:
-    - cron: "17 4 * * *"
+    # Weekly, not nightly. The scheduled run exists to feed the EWMA slow-drift
+    # series, which needs regular samples but not daily ones - and at tier=full
+    # a nightly run bills a full eval every day against a repo nobody pushed to.
+    # Sunday 04:17 UTC keeps drift detection at about a seventh of the cost.
+    - cron: "17 4 * * 0"
   workflow_dispatch:
 
 concurrency:
@@ -35,7 +39,14 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-      - run: uv python install 3.11
+      # actions/setup-python, not `uv python install`: with UV_SYSTEM_PYTHON=1
+      # `uv pip install --system` targets whatever python is active on PATH.
+      # `uv python install` downloads an interpreter without making it active,
+      # so --system still resolved to the runner's /usr python - which newer
+      # images mark PEP 668 externally-managed, failing every install step.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
       - name: Install
         run: uv pip install --system -e '.[dev]'
       - name: Lint
@@ -60,7 +71,14 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-      - run: uv python install 3.11
+      # actions/setup-python, not `uv python install`: with UV_SYSTEM_PYTHON=1
+      # `uv pip install --system` targets whatever python is active on PATH.
+      # `uv python install` downloads an interpreter without making it active,
+      # so --system still resolved to the runner's /usr python - which newer
+      # images mark PEP 668 externally-managed, failing every install step.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
       - name: Install
         run: uv pip install --system -e '.[dev,e2e]'
       - name: Install browsers
@@ -98,7 +116,14 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-      - run: uv python install 3.11
+      # actions/setup-python, not `uv python install`: with UV_SYSTEM_PYTHON=1
+      # `uv pip install --system` targets whatever python is active on PATH.
+      # `uv python install` downloads an interpreter without making it active,
+      # so --system still resolved to the runner's /usr python - which newer
+      # images mark PEP 668 externally-managed, failing every install step.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
       - run: uv pip install --system -e '.'
       - name: Validate golden dataset
         run: python -m mrd.dataset validate
@@ -154,7 +179,14 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-      - run: uv python install 3.11
+      # actions/setup-python, not `uv python install`: with UV_SYSTEM_PYTHON=1
+      # `uv pip install --system` targets whatever python is active on PATH.
+      # `uv python install` downloads an interpreter without making it active,
+      # so --system still resolved to the runner's /usr python - which newer
+      # images mark PEP 668 externally-managed, failing every install step.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
       - run: uv pip install --system -e '.[providers]'
 
       - name: Restore run history

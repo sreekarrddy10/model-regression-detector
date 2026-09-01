@@ -8,6 +8,7 @@ payloads - no network, no SDK installed, no API key.
 from __future__ import annotations
 
 import json
+import sys
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -99,6 +100,147 @@ def test_anthropic_falls_back_to_text_block() -> None:
         usage=SimpleNamespace(input_tokens=1, output_tokens=1),
     )
     assert anthropic_provider.normalize(raw, REQUEST, 5).text == "plain prose"
+
+
+# --------------------------------------------------------------------------- #
+# One retry layer, not two
+# --------------------------------------------------------------------------- #
+
+
+class _RecordingSDK:
+    """Captures the kwargs the provider constructs its client with."""
+
+    def __init__(self) -> None:
+        self.kwargs: dict[str, object] = {}
+
+    def __call__(self, **kwargs):  # type: ignore[no-untyped-def]
+        self.kwargs = kwargs
+        return SimpleNamespace()
+
+
+@pytest.mark.parametrize(
+    "module,attr,provider_factory,env",
+    [
+        (
+            "openai",
+            "AsyncOpenAI",
+            lambda: openai_provider.OpenAIProvider(api_key="k"),
+            "OPENAI_API_KEY",
+        ),
+        (
+            "anthropic",
+            "AsyncAnthropic",
+            lambda: anthropic_provider.AnthropicProvider(api_key="k"),
+            "ANTHROPIC_API_KEY",
+        ),
+    ],
+)
+def test_sdk_retries_are_disabled(monkeypatch, module, attr, provider_factory, env) -> None:
+    """The SDKs retry internally with their own backoff, and that backoff falls
+    inside the latency measurement. Two retry layers turned a rate-limited call
+    into a 16-second "model response", and the gate reads latency drift as a
+    regression. mrd.retry must be the only retry layer."""
+    sdk = _RecordingSDK()
+    monkeypatch.setitem(sys.modules, module, SimpleNamespace(**{attr: sdk}))
+    provider_factory()._get_client()
+    assert sdk.kwargs["max_retries"] == 0
+
+
+# --------------------------------------------------------------------------- #
+# Temperature across SDK generations
+# --------------------------------------------------------------------------- #
+
+
+class _FakeMessages:
+    """Stands in for `client.messages`, with a controllable create() signature."""
+
+    def __init__(self, *, takes_temperature: bool) -> None:
+        self.seen: dict[str, object] = {}
+        if takes_temperature:
+
+            async def create(
+                *,
+                model,
+                max_tokens,
+                system,
+                messages,
+                tools=None,
+                tool_choice=None,
+                temperature=None,
+            ):
+                self.seen = {"model": model, "temperature": temperature}
+                return _anthropic_payload("s")
+
+        else:
+
+            async def create(*, model, max_tokens, system, messages, tools=None, tool_choice=None):
+                self.seen = {"model": model}
+                return _anthropic_payload("s")
+
+        self.create = create
+
+
+def _anthropic_with(*, takes_temperature: bool) -> tuple[object, _FakeMessages]:
+    provider = anthropic_provider.AnthropicProvider(api_key="test")
+    messages = _FakeMessages(takes_temperature=takes_temperature)
+    provider._client = SimpleNamespace(messages=messages)
+    return provider, messages
+
+
+def test_temperature_is_sent_when_the_sdk_accepts_it() -> None:
+    provider, messages = _anthropic_with(takes_temperature=True)
+    run(provider.complete(replace(REQUEST, model="claude-sonnet-5", temperature=0.0)))
+    assert messages.seen["temperature"] == 0.0
+
+
+def test_temperature_the_sdk_cannot_honour_is_refused_not_dropped() -> None:
+    """anthropic 1.x removed `temperature`. Silently sampling at the provider
+    default would surface as flaky classifications the gate reads as drift."""
+    provider, _ = _anthropic_with(takes_temperature=False)
+    with pytest.raises(ProviderError) as exc:
+        run(provider.complete(replace(REQUEST, model="claude-sonnet-5", temperature=0.0)))
+    message = str(exc.value)
+    assert "does not accept a temperature" in message
+    assert "anthropic<1.0" in message  # the error names both ways out
+    assert "None" in message
+
+
+def test_temperature_none_runs_on_an_sdk_without_the_parameter() -> None:
+    """The documented opt-out: no determinism claim, and the call goes through."""
+    provider, messages = _anthropic_with(takes_temperature=False)
+    response = run(provider.complete(replace(REQUEST, model="claude-sonnet-5", temperature=None)))
+    assert "temperature" not in messages.seen
+    assert json.loads(response.text) == {"category": "billing", "summary": "s"}
+
+
+def test_temperature_none_is_omitted_by_openai_too() -> None:
+    """None must mean the same thing on both providers, or parity is a fiction."""
+    captured: dict[str, object] = {}
+
+    async def create(**kwargs):
+        captured.update(kwargs)
+        return _openai_payload('{"category": "billing", "summary": "s"}')
+
+    provider = openai_provider.OpenAIProvider(api_key="test")
+    completions = SimpleNamespace(create=create)
+    provider._client = SimpleNamespace(chat=SimpleNamespace(completions=completions))
+    run(provider.complete(replace(REQUEST, temperature=None)))
+    assert "temperature" not in captured
+
+
+def test_temperature_none_is_distinguishable_in_the_fingerprint() -> None:
+    """A run that made no determinism claim must not hash like one that did."""
+    assert replace(REQUEST, temperature=None).fingerprint() != REQUEST.fingerprint()
+
+
+def test_accepts_temperature_reads_the_signature() -> None:
+    async def with_temp(*, model, temperature=None): ...
+    async def without(*, model): ...
+    async def kwargs_only(**kw): ...
+
+    assert anthropic_provider._accepts_temperature(with_temp)
+    assert not anthropic_provider._accepts_temperature(without)
+    assert anthropic_provider._accepts_temperature(kwargs_only)
 
 
 def test_missing_usage_defaults_to_zero() -> None:

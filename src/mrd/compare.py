@@ -207,6 +207,56 @@ class GateReport:
         return 1 if self.verdict is Verdict.BLOCK else 0
 
 
+def evaluate_first_run(
+    outcome: RunOutcome,
+    *,
+    judge_calibrated: bool = True,
+    min_attempt_success: float = 0.5,
+) -> GateReport:
+    """The gate for a run with no baseline to compare against.
+
+    A first run cannot detect a regression - there is nothing to regress from -
+    so it was previously reported as an unconditional PASS. That let a run in
+    which every provider call returned 401 be recorded as the baseline and
+    announced as green: 0% accuracy, judge uncalibrated over 0 samples, verdict
+    PASS. A gate that is green while measuring nothing is the exact failure this
+    project exists to prevent, so the checks that need no baseline still apply.
+
+    `min_attempt_success` is a sanity floor, not a quality bar. It asks whether
+    the run happened at all, and a real prompt scoring below half on the golden
+    set is a broken baseline worth refusing either way.
+    """
+    blocking: list[str] = []
+    total = len(outcome.results)
+
+    if total == 0:
+        blocking.append("the run produced no attempts at all")
+    else:
+        errored = sum(1 for r in outcome.results if r.error is not None)
+        if errored == total:
+            blocking.append(
+                f"every one of {total} attempts failed at the provider; "
+                "this run measured nothing and must not become a baseline"
+            )
+        else:
+            passed = sum(1 for r in outcome.results if r.passed)
+            share = passed / total
+            if share < min_attempt_success:
+                blocking.append(
+                    f"only {passed} of {total} attempts passed ({share:.0%}); "
+                    f"below the {min_attempt_success:.0%} floor for a first baseline"
+                )
+
+    if not judge_calibrated:
+        blocking.append(
+            "the judge failed calibration, so its quality scores cannot be "
+            "interpreted and this run must not be recorded as a baseline"
+        )
+
+    verdict = Verdict.BLOCK if blocking else Verdict.PASS
+    return GateReport(verdict=verdict, blocking=tuple(blocking), warnings=())
+
+
 def evaluate(
     comparison: Comparison,
     *,
