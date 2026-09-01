@@ -156,8 +156,8 @@ pricing, prompts and both CLIs.
 - [x] The degraded `v002` prompt exists, so the gate demo is one command
 - [x] `make eval TIER=full` reproducible from config alone — 98.8% accuracy, local and CI agreeing
 - [x] Judge κ ≥ 0.60 recorded in repo — κ 0.96 over 20/20 holdout, see README "Measured results"
-- [~] Blocked PR + passed PR linked from README — PR #1 merged and green; the blocked
-      proof is verified locally and open at PR #2, waiting on PR #4 (cache fix) and API credit
+- [x] Blocked PR + passed PR linked from README — PR #1 merged green at 98.8%; PR #2
+      blocked in CI on gen-017 at 93.8%, comparing against main's cached baseline
 - [ ] Loom recorded — waiting on the blocked-PR proof being green in CI
 
 ### Found by the first real deployment (none reachable offline)
@@ -167,7 +167,7 @@ pricing, prompts and both CLIs.
 - [x] two stacked retry layers put SDK backoff inside the latency measurement
 - [x] **a first run with no baseline was a hardcoded PASS** — a run where every call
       returned 401 reported PASS and was recorded as the baseline
-- [~] **`push: branches-ignore: [main]` meant no PR ever had a baseline**, so every
+- [x] **`push: branches-ignore: [main]` meant no PR ever had a baseline**, so every
       PR took the first-run path and passed; the gate could not block anything in CI (PR #4)
 - [x] 5 label errors, all dead sentinels — cases that could never fail, or never pass
 
