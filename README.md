@@ -230,19 +230,101 @@ with CI.
 - **[docs/sample-report.html](docs/sample-report.html)** — a real diff report.
 - **[docs/SPEC.md](docs/SPEC.md)** — the full build specification.
 
-## Next
+## Measured results
 
-Write the golden cases. `make dataset-report` shows progress against every target and names the
-three strata to write next. Everything downstream activates the moment `make dataset-lock` runs.
+Every number below is from a real run against the locked golden dataset. Nothing here
+is estimated or projected; where a result has not been reproduced in CI, it says so.
 
-Then the gate demo is two commands: `make eval` establishes a baseline on the shipping prompt, and
-`make eval-demo` runs the degraded fixture, which should block. `v002` is written to be a
-*realistic* bad commit — it keeps the task and the category definitions and only drops the tie-break
-rules and the few-shot anchor, so spot-checking a handful of easy emails shows nothing wrong. Only
-the ambiguous and adversarial cases depend on what it removed. That is the change this whole system
-exists to catch.
+### Baseline — `v001` on dataset `v2`
 
-One proof remains deferred: a blocked PR on GitHub, which needs a remote and real cases.
+| Metric | Value | Where measured |
+|---|---:|---|
+| Accuracy | 98.8% | local and CI, agreeing |
+| pass^3 | 97.5% | local and CI |
+| Summary quality (judge) | 4.91 / 5 | CI |
+| Judge calibration κ | 0.96 | CI, 20/20 holdout scored |
+| p95 latency | 1128 ms | CI |
+| Cost per case | $0.0003 | CI, classifier only |
+
+κ has been measured five times across local probes and CI runs and has landed
+between 0.96 and 0.99 every time. The floor is 0.60; below it the run aborts
+rather than reporting a quality number.
+
+One case fails deliberately. `acct-013` — *"how do I reduce our seat count, and
+will our bill drop accordingly?"* — is classified `billing` on every attempt,
+because v001 lets any mention of a bill outrank the action the customer asked
+for. Tie-break 3 says otherwise. It is a real blind spot and it stays red; a
+golden set where everything passes measures nothing.
+
+### The gate demo — degraded `v002`
+
+Verified locally against a clean `v001` baseline:
+
+```
+BLOCK: 3 regressions and 1 improvement: accuracy 98.8% -> 96.2%
+  BLOCK  1 critical case(s) regressed: gen-017
+  warn   accuracy fell 3.8%; not significant (McNemar p=0.250)
+```
+
+Read the third line. **The accuracy drop is not statistically significant** —
+McNemar puts it at p=0.250, so a gate keyed on accuracy alone waves this through
+as noise. It blocks because a case tagged `critical` regressed, and critical
+cases block regardless of significance. That is the argument for the critical
+stratum, and it is the whole point of the demo.
+
+`v002` is written to be a *realistic* bad commit: it keeps the task statement and
+the category definitions and drops only the tie-break rules and the few-shot
+anchor. Spot-checking easy emails shows nothing wrong, because easy emails do not
+depend on what was removed.
+
+**Reproduced in CI.** [PR #2](https://github.com/sreekarrddy10/model-regression-detector/pull/2)
+carries this prompt and is blocked by the gate:
+
+```
+Cache restored from key: mrd-runs-main-33529454696
+BLOCK: 5 regressions and 1 improvement: accuracy 98.8% -> 93.8%
+  BLOCK  1 critical case(s) regressed: gen-017
+  warn   accuracy fell 5.0%; not significant (McNemar p=0.219)
+```
+
+[PR #1](https://github.com/sreekarrddy10/model-regression-detector/pull/1) is the
+passing counterpart: same dataset, same tier, merged green at 98.8%. The
+[baseline run on main](https://github.com/sreekarrddy10/model-regression-detector/actions/runs/33529454696)
+is what #2 compares against.
+
+## Known gaps
+
+Stated here rather than left to be discovered.
+
+- **68 of 80 labels have not been read case-by-case.** They have been audited
+  mechanically against the field spec, which is a weaker claim than reading them.
+  What that audit covers, across all 80 cases:
+
+  | check | result |
+  |---|---|
+  | Summary under 25 words, single sentence | all pass |
+  | Summary cites a number or name absent from the email | none |
+  | Category name leaked into the summary | none |
+  | Near-duplicate emails (≥0.45 token overlap) | none |
+  | `expected_summary` reused across cases | none |
+  | Few-shot leakage against every prompt version | all ≤0.22 (threshold 0.45) |
+  | Cross-case label consistency by definitional term | no violations |
+
+  Difficulty labels are calibrated against live results — `easy` 100%, `medium`
+  97%, `hard` 95% — so the difficulty axis predicts failure rate rather than
+  being assigned by feel.
+
+  What the audit cannot catch: a case where the label and the prompt are both
+  wrong, or a summary that is accurate but emphasises the wrong thing. Both of
+  those were found by reading — `tech-011`, `gen-014`, `tech-018`, `tech-020` and
+  `acct-007` were all relabelled that way. So the defensible claim is **audited
+  three ways — rule consistency, live baseline, few-shot leakage** — not
+  "hand-verified every label".
+- **`technical` has thinned to 18 cases** as seat and lockout cases moved to
+  `account` during review. Every coverage floor still passes.
+- **`latest_baseline` filters on `dataset_hash` but not `prompt_version`**, so
+  `make eval-demo` records itself and becomes the next baseline. Run it once per
+  baseline or the second run passes.
 
 ## Container
 

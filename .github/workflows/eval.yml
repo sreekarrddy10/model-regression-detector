@@ -8,8 +8,13 @@ name: eval
 # Running `full` on every push would cost more than it catches.
 
 on:
+  # main is NOT ignored, and that is load-bearing. The gate restores its baseline
+  # from a cache whose last restore-key is `mrd-runs-main-`, but nothing ever
+  # wrote that cache while main was excluded from `push`. Every pull request
+  # therefore found no baseline, took the first-run path, and passed - a gate
+  # that structurally could not detect the regressions it exists to catch.
   push:
-    branches-ignore: [main]
+    branches: ['**']
   pull_request:
     branches: [main]
   schedule:
@@ -156,9 +161,13 @@ jobs:
           else
             echo "locked=false" >> "$GITHUB_OUTPUT"
           fi
+          # A push to main must be full: it is the run every later pull request
+          # compares against, and a baseline built from a sampled smoke subset
+          # would make those comparisons meaningless.
           if [ "${{ github.event_name }}" = "pull_request" ] \
              || [ "${{ github.event_name }}" = "schedule" ] \
-             || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+             || [ "${{ github.event_name }}" = "workflow_dispatch" ] \
+             || [ "${{ github.ref_name }}" = "main" ]; then
             echo "tier=full" >> "$GITHUB_OUTPUT"
           elif git diff --name-only HEAD~1 HEAD | grep -qE '^(prompts/|src/mrd/)'; then
             echo "tier=smoke" >> "$GITHUB_OUTPUT"
@@ -169,6 +178,19 @@ jobs:
   gate:
     name: eval gate
     needs: [quality, dataset, tier]
+    # The workflow-level concurrency group is keyed on the ref, so evals on
+    # different branches run in parallel. The provider rate limit is not
+    # per-branch - it is one org-wide token-per-minute budget - so parallel evals
+    # starve each other. Three runs landed within 30 seconds once and the judge
+    # lost 7 of 20 holdout samples to 429s, which correctly failed calibration
+    # and blocked a healthy baseline.
+    #
+    # This group has no ref in it, so gate jobs queue behind one another across
+    # the whole repository. cancel-in-progress stays false: a queued eval is
+    # worth waiting for, and cancelling one wastes the API spend already made.
+    concurrency:
+      group: mrd-eval-gate
+      cancel-in-progress: false
     if: needs.tier.outputs.tier != 'none' && needs.tier.outputs.locked == 'true'
     runs-on: ubuntu-latest
     permissions:
